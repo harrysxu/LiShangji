@@ -1,0 +1,320 @@
+//
+//  RecordEntryView.swift
+//  LiShangJi
+//
+//  Created by 徐晓龙 on 2026/2/6.
+//
+
+import SwiftUI
+import SwiftData
+
+/// 手动录入 Sheet
+struct RecordEntryView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @State private var viewModel = RecordViewModel()
+    @State private var showDatePicker = false
+    @State private var showToast = false
+
+    var preselectedBook: GiftBook?
+
+    @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: AppConstants.Spacing.lg) {
+                        // 收到/送出切换
+                        directionPicker
+
+                        // 金额显示
+                        amountDisplay
+
+                        // 表单字段
+                        formFields
+                    }
+                    .padding(.horizontal, AppConstants.Spacing.lg)
+                    .padding(.top, AppConstants.Spacing.md)
+                }
+
+                // 金额键盘
+                AmountKeypadView(amount: $viewModel.amount) {
+                    save()
+                }
+            }
+            .lsjPageBackground()
+            .navigationTitle("新增记录")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+            .onAppear {
+                viewModel.selectedBook = preselectedBook ?? books.first
+            }
+            .toast(isPresented: $showToast, message: "记录保存成功")
+            .alert("保存失败", isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )) {
+                Button("确定") { viewModel.errorMessage = nil }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+        }
+    }
+
+    // MARK: - 收到/送出切换
+
+    private var directionPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(GiftDirection.allCases, id: \.self) { dir in
+                Button {
+                    HapticManager.shared.selection()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.direction = dir
+                    }
+                } label: {
+                    Text(dir.displayName)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(viewModel.direction == dir
+                            ? (dir == .received ? Color.theme.received : Color.theme.sent)
+                            : Color.theme.card)
+                        .foregroundStyle(viewModel.direction == dir ? .white : Color.theme.textSecondary)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppConstants.Radius.sm)
+                .strokeBorder(Color.theme.divider, lineWidth: 0.5)
+        )
+        .accessibilityIdentifier("direction_picker")
+    }
+
+    // MARK: - 金额显示
+
+    private var amountDisplay: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("¥")
+                .font(.title.bold())
+                .foregroundStyle(Color.theme.textSecondary)
+            Text(viewModel.amount.isEmpty ? "0" : viewModel.amount)
+                .font(.system(size: 42, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Color.theme.textPrimary)
+                .contentTransition(.numericText())
+                .animation(.snappy, value: viewModel.amount)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppConstants.Spacing.md)
+        .accessibilityIdentifier("amount_display")
+    }
+
+    // MARK: - 表单字段
+
+    private var formFields: some View {
+        VStack(spacing: 1) {
+            // 联系人
+            contactField
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            // 事件类型
+            eventCategoryField
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            // 日期
+            dateField
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            // 账本选择
+            bookField
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            // 备注
+            noteField
+        }
+        .background(Color.theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+    }
+
+    // MARK: - 联系人字段
+
+    private var contactField: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: AppConstants.Spacing.md) {
+                Image(systemName: "person.fill")
+                    .foregroundStyle(Color.theme.primary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("联系人")
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+                    TextField("输入姓名", text: $viewModel.contactName)
+                        .font(.body)
+                        .accessibilityIdentifier("contact_name_field")
+                        .onChange(of: viewModel.contactName) { _, newValue in
+                            viewModel.searchContacts(query: newValue, context: modelContext)
+                        }
+                }
+
+                if let contact = viewModel.selectedContact {
+                    Text("差额: \(contact.balance.balanceString)")
+                        .font(.caption)
+                        .foregroundStyle(contact.balance >= 0 ? Color.theme.received : Color.theme.sent)
+                }
+            }
+            .padding(AppConstants.Spacing.md)
+
+            // 联系人建议列表
+            if !viewModel.contactSuggestions.isEmpty {
+                Divider()
+                ForEach(viewModel.contactSuggestions, id: \.id) { contact in
+                    Button {
+                        viewModel.selectContact(contact)
+                    } label: {
+                        HStack {
+                            Text(contact.name)
+                                .foregroundStyle(Color.theme.textPrimary)
+                            Text(contact.relationType.displayName)
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.textSecondary)
+                            Spacer()
+                            Text("差额: \(contact.balance.balanceString)")
+                                .font(.caption)
+                                .foregroundStyle(contact.balance >= 0 ? Color.theme.received : Color.theme.sent)
+                        }
+                        .padding(.horizontal, AppConstants.Spacing.md)
+                        .padding(.vertical, AppConstants.Spacing.sm)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - 事件类型
+
+    private var eventCategoryField: some View {
+        VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
+            HStack(spacing: AppConstants.Spacing.md) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Color.theme.primary)
+                    .frame(width: 24)
+                Text("事件类型")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+            }
+            .padding(.horizontal, AppConstants.Spacing.md)
+            .padding(.top, AppConstants.Spacing.md)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppConstants.Spacing.sm) {
+                    ForEach(EventCategory.allCases, id: \.self) { category in
+                        LSJTag(
+                            text: category.displayName,
+                            color: Color.theme.primary,
+                            isSelected: viewModel.selectedEventCategory == category,
+                            icon: category.icon
+                        )
+                        .onTapGesture {
+                            HapticManager.shared.selection()
+                            viewModel.selectedEventCategory = category
+                        }
+                    }
+                }
+                .padding(.horizontal, AppConstants.Spacing.md)
+            }
+            .padding(.bottom, AppConstants.Spacing.md)
+        }
+    }
+
+    // MARK: - 日期
+
+    private var dateField: some View {
+        HStack(spacing: AppConstants.Spacing.md) {
+            Image(systemName: "calendar")
+                .foregroundStyle(Color.theme.primary)
+                .frame(width: 24)
+
+            Text("日期")
+                .font(.caption)
+                .foregroundStyle(Color.theme.textSecondary)
+
+            Spacer()
+
+            DatePicker("", selection: $viewModel.eventDate, displayedComponents: .date)
+                .labelsHidden()
+                .tint(Color.theme.primary)
+        }
+        .padding(AppConstants.Spacing.md)
+    }
+
+    // MARK: - 账本选择
+
+    private var bookField: some View {
+        HStack(spacing: AppConstants.Spacing.md) {
+            Image(systemName: "book.closed.fill")
+                .foregroundStyle(Color.theme.primary)
+                .frame(width: 24)
+
+            Text("账本")
+                .font(.caption)
+                .foregroundStyle(Color.theme.textSecondary)
+
+            Spacer()
+
+            if books.isEmpty {
+                Text("无账本")
+                    .font(.body)
+                    .foregroundStyle(Color.theme.textSecondary)
+            } else {
+                Picker("", selection: $viewModel.selectedBook) {
+                    Text("不选择").tag(nil as GiftBook?)
+                    ForEach(books, id: \.id) { book in
+                        Text(book.name).tag(book as GiftBook?)
+                    }
+                }
+                .tint(Color.theme.textPrimary)
+            }
+        }
+        .padding(AppConstants.Spacing.md)
+    }
+
+    // MARK: - 备注
+
+    private var noteField: some View {
+        HStack(spacing: AppConstants.Spacing.md) {
+            Image(systemName: "note.text")
+                .foregroundStyle(Color.theme.primary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("备注")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+                TextField("选填", text: $viewModel.note)
+                    .font(.body)
+            }
+        }
+        .padding(AppConstants.Spacing.md)
+    }
+
+    // MARK: - 保存
+
+    private func save() {
+        if viewModel.saveRecord(context: modelContext) {
+            showToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                dismiss()
+            }
+        }
+    }
+}
