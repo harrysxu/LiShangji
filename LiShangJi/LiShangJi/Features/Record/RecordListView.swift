@@ -18,7 +18,9 @@ struct RecordListView: View {
     var body: some View {
         List {
             ForEach(records, id: \.id) { record in
-                NavigationLink(value: RecordNavigationID(id: record.id)) {
+                NavigationLink {
+                    RecordDetailView(record: record)
+                } label: {
                     recordRow(record)
                 }
                 .listRowBackground(Color.theme.card)
@@ -29,11 +31,6 @@ struct RecordListView: View {
         .scrollContentBackground(.hidden)
         .lsjPageBackground()
         .navigationTitle(title)
-        .navigationDestination(for: RecordNavigationID.self) { navID in
-            if let record = records.first(where: { $0.id == navID.id }) {
-                RecordDetailView(record: record)
-            }
-        }
     }
 
     private func recordRow(_ record: GiftRecord) -> some View {
@@ -43,7 +40,7 @@ struct RecordListView: View {
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.contact?.name ?? "未知")
+                Text(record.displayName)
                     .font(.headline)
                     .foregroundStyle(Color.theme.textPrimary)
                 Text("\(record.giftDirection.displayName) · \(record.eventName)")
@@ -92,7 +89,9 @@ struct AllRecordsListView: View {
     var body: some View {
         List {
             ForEach(loadedRecords, id: \.id) { record in
-                NavigationLink(value: RecordNavigationID(id: record.id)) {
+                NavigationLink {
+                    RecordDetailView(record: record)
+                } label: {
                     recordRow(record)
                 }
                 .listRowBackground(Color.theme.card)
@@ -116,11 +115,6 @@ struct AllRecordsListView: View {
         .scrollContentBackground(.hidden)
         .lsjPageBackground()
         .navigationTitle("全部记录")
-        .navigationDestination(for: RecordNavigationID.self) { navID in
-            if let record = loadedRecords.first(where: { $0.id == navID.id }) {
-                RecordDetailView(record: record)
-            }
-        }
         .onAppear {
             if loadedRecords.isEmpty {
                 loadMore()
@@ -150,7 +144,7 @@ struct AllRecordsListView: View {
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.contact?.name ?? "未知")
+                Text(record.displayName)
                     .font(.headline)
                     .foregroundStyle(Color.theme.textPrimary)
                 Text("\(record.giftDirection.displayName) · \(record.eventName)")

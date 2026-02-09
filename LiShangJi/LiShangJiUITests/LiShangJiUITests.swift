@@ -197,7 +197,7 @@ final class LiShangJiUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsShowsLunarCalendar() throws {
+    func testSettingsShowsEventsAndFestivals() throws {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 5))
 
@@ -206,7 +206,7 @@ final class LiShangJiUITests: XCTestCase {
         let navTitle = app.navigationBars["我的"]
         XCTAssertTrue(navTitle.waitForExistence(timeout: 3))
 
-        XCTAssertTrue(app.staticTexts["农历与节日"].exists, "农历与节日应该可见")
+        XCTAssertTrue(app.staticTexts["事件与节日"].exists, "事件与节日应该可见")
     }
 
     @MainActor

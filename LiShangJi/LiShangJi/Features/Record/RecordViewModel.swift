@@ -104,6 +104,7 @@ class RecordViewModel {
                 eventCategory: selectedEventCategory.rawValue,
                 eventDate: eventDate,
                 note: note,
+                contactName: trimmedName,
                 book: selectedBook,
                 contact: contact,
                 context: context

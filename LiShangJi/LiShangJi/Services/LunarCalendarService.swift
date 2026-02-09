@@ -247,6 +247,31 @@ class LunarCalendarService {
         return nil
     }
     
+    // MARK: - 指定月份的节日列表
+
+    /// 获取指定公历年月内的所有农历节日
+    /// - Parameters:
+    ///   - year: 公历年
+    ///   - month: 公历月
+    /// - Returns: 该月内所有农历节日的名称、公历日期和农历日期字符串
+    func festivalsInMonth(year: Int, month: Int) -> [(name: String, solarDate: Date, lunarDate: String)] {
+        let calendar = Calendar.current
+        guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: monthStart) else {
+            return []
+        }
+
+        var results: [(name: String, solarDate: Date, lunarDate: String)] = []
+        for dayOffset in 0..<range.count {
+            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: monthStart) else { continue }
+            if let name = festivalName(for: date) {
+                let lunarStr = lunarDateString(from: date)
+                results.append((name: name, solarDate: date, lunarDate: lunarStr))
+            }
+        }
+        return results
+    }
+
     // MARK: - 辅助方法
     
     /// 获取农历年的总天数

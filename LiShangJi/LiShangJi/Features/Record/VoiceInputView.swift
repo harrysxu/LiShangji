@@ -268,6 +268,7 @@ struct VoiceInputView: View {
                 eventCategory: editableResult.eventCategory.rawValue,
                 eventDate: Date(),
                 note: "语音录入: \(voiceService.recognizedText)",
+                contactName: editableResult.contactName,
                 book: books.first,
                 contact: contact,
                 context: modelContext

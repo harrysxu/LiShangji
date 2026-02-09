@@ -10,7 +10,7 @@ import SwiftData
 
 /// 账本详情页 - 记录列表（按月分组）
 struct GiftBookDetailView: View {
-    let book: GiftBook
+    let bookID: UUID
     @Environment(\.modelContext) private var modelContext
     @Environment(NavigationRouter.self) private var router
     @State private var filterDirection: GiftDirection? = nil
@@ -18,21 +18,72 @@ struct GiftBookDetailView: View {
     @State private var exportShareItem: ExportShareItem?
     @State private var showExportError = false
 
-    // 缓存排序/过滤/分组结果，避免在 body 中重复计算
-    @State private var cachedRecords: [GiftRecord] = []
-    @State private var cachedGroupedRecords: [(String, [GiftRecord])] = []
+    // 用 @Query 自动获取该账本的所有记录，SwiftData 负责生命周期管理
+    @Query private var allRecords: [GiftRecord]
+
+    init(bookID: UUID) {
+        self.bookID = bookID
+        _allRecords = Query(
+            filter: #Predicate<GiftRecord> { record in
+                record.book?.id == bookID
+            },
+            sort: [SortDescriptor(\GiftRecord.eventDate, order: .reverse)]
+        )
+    }
+
+    // MARK: - 从 ModelContext 获取 book 对象
+
+    private var book: GiftBook? {
+        let id = bookID
+        let descriptor = FetchDescriptor<GiftBook>(
+            predicate: #Predicate<GiftBook> { $0.id == id }
+        )
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    // MARK: - 过滤 & 分组（纯内存计算属性）
+
+    private var filteredRecords: [GiftRecord] {
+        if let filter = filterDirection {
+            return allRecords.filter { $0.direction == filter.rawValue }
+        }
+        return allRecords
+    }
+
+    private var groupedRecords: [(String, [GiftRecord])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: filteredRecords) { record in
+            let components = calendar.dateComponents([.year, .month], from: record.eventDate)
+            return "\(components.year ?? 2026)年\(components.month ?? 1)月"
+        }
+        return grouped.sorted { $0.key > $1.key }
+    }
 
     var body: some View {
+        Group {
+            if let book {
+                bookDetailContent(book)
+            } else {
+                ContentUnavailableView("账本不存在", systemImage: "book.closed",
+                                       description: Text("该账本可能已被删除"))
+            }
+        }
+    }
+
+    // MARK: - 主内容
+
+    @ViewBuilder
+    private func bookDetailContent(_ book: GiftBook) -> some View {
         ScrollView {
-            VStack(spacing: AppConstants.Spacing.lg) {
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 // 汇总信息
-                summaryHeader
+                summaryHeader(book)
 
                 // 筛选栏
                 filterBar
 
                 // 记录列表
-                if cachedRecords.isEmpty {
+                if filteredRecords.isEmpty {
                     LSJEmptyStateView(
                         icon: "tray",
                         title: "暂无记录",
@@ -43,29 +94,40 @@ struct GiftBookDetailView: View {
                         router.showingRecordEntry = true
                     }
                 } else {
-                    ForEach(cachedGroupedRecords, id: \.0) { month, monthRecords in
-                        VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
+                    ForEach(groupedRecords, id: \.0) { month, monthRecords in
+                        Section {
+                            ForEach(Array(monthRecords.enumerated()), id: \.element.id) { index, record in
+                                VStack(spacing: 0) {
+                                    NavigationLink(value: RecordNavigationID(id: record.id)) {
+                                        recordRow(record)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if index < monthRecords.count - 1 {
+                                        Divider()
+                                            .foregroundStyle(Color.theme.divider)
+                                            .padding(.leading, AppConstants.Spacing.xl)
+                                    }
+                                }
+                                .background(Color.theme.card)
+                                .clipShape(
+                                    UnevenRoundedRectangle(
+                                        topLeadingRadius: index == 0 ? AppConstants.Radius.md : 0,
+                                        bottomLeadingRadius: index == monthRecords.count - 1 ? AppConstants.Radius.md : 0,
+                                        bottomTrailingRadius: index == monthRecords.count - 1 ? AppConstants.Radius.md : 0,
+                                        topTrailingRadius: index == 0 ? AppConstants.Radius.md : 0
+                                    )
+                                )
+                                .padding(.horizontal, AppConstants.Spacing.lg)
+                            }
+                        } header: {
                             Text(month)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(Color.theme.textSecondary)
                                 .padding(.horizontal, AppConstants.Spacing.lg)
-
-                            LSJCard {
-                                LazyVStack(spacing: 0) {
-                                    ForEach(monthRecords, id: \.id) { record in
-                                        NavigationLink(value: RecordNavigationID(id: record.id)) {
-                                            recordRow(record)
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        if record.id != monthRecords.last?.id {
-                                            Divider()
-                                                .foregroundStyle(Color.theme.divider)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, AppConstants.Spacing.lg)
+                                .padding(.vertical, AppConstants.Spacing.sm)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.theme.background)
                         }
                     }
                 }
@@ -79,7 +141,7 @@ struct GiftBookDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button("导出 CSV", systemImage: "square.and.arrow.up") {
-                        exportBookCSV()
+                        exportBookCSV(book)
                     }
                     Button("编辑账本", systemImage: "pencil") {
                         showingEditSheet = true
@@ -90,7 +152,7 @@ struct GiftBookDetailView: View {
             }
         }
         .navigationDestination(for: RecordNavigationID.self) { navID in
-            if let record = cachedRecords.first(where: { $0.id == navID.id }) {
+            if let record = allRecords.first(where: { $0.id == navID.id }) {
                 RecordDetailView(record: record)
             }
         }
@@ -102,15 +164,6 @@ struct GiftBookDetailView: View {
         }
         .alert("导出失败", isPresented: $showExportError) {
             Button("确定") {}
-        }
-        .onAppear {
-            recomputeRecords()
-        }
-        .onChange(of: filterDirection) { _, _ in
-            recomputeRecords()
-        }
-        .onChange(of: book.cachedRecordCount) { _, _ in
-            recomputeRecords()
         }
         .overlay(alignment: .bottomTrailing) {
             Button {
@@ -132,32 +185,9 @@ struct GiftBookDetailView: View {
         }
     }
 
-    // MARK: - 计算并缓存记录
-
-    private func recomputeRecords() {
-        let allRecords = book.records ?? []
-        let filtered: [GiftRecord]
-        if let filter = filterDirection {
-            filtered = allRecords
-                .filter { $0.direction == filter.rawValue }
-                .sorted { $0.eventDate > $1.eventDate }
-        } else {
-            filtered = allRecords.sorted { $0.eventDate > $1.eventDate }
-        }
-        cachedRecords = filtered
-
-        // 按月分组
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: filtered) { record in
-            let components = calendar.dateComponents([.year, .month], from: record.eventDate)
-            return "\(components.year ?? 2026)年\(components.month ?? 1)月"
-        }
-        cachedGroupedRecords = grouped.sorted { $0.key > $1.key }
-    }
-
     // MARK: - 导出
 
-    private func exportBookCSV() {
+    private func exportBookCSV(_ book: GiftBook) {
         do {
             let url = try ExportService.shared.exportBookToCSV(book: book)
             exportShareItem = ExportShareItem(url: url)
@@ -170,7 +200,7 @@ struct GiftBookDetailView: View {
 
     // MARK: - 汇总头部
 
-    private var summaryHeader: some View {
+    private func summaryHeader(_ book: GiftBook) -> some View {
         HStack {
             VStack(alignment: .leading) {
                 Text("总收到")
@@ -240,7 +270,7 @@ struct GiftBookDetailView: View {
     private func recordRow(_ record: GiftRecord) -> some View {
         HStack(spacing: AppConstants.Spacing.md) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.contact?.name ?? "未知")
+                Text(record.displayName)
                     .font(.headline)
                     .foregroundStyle(Color.theme.textPrimary)
                 HStack(spacing: AppConstants.Spacing.xs) {
@@ -263,5 +293,6 @@ struct GiftBookDetailView: View {
                 .foregroundStyle(record.isReceived ? Color.theme.received : Color.theme.sent)
         }
         .padding(.vertical, AppConstants.Spacing.sm)
+        .padding(.horizontal, AppConstants.Spacing.lg)
     }
 }

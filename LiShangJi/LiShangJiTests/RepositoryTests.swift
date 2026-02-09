@@ -209,6 +209,7 @@ struct GiftRecordRepositoryTests {
             eventCategory: "wedding",
             eventDate: Date(),
             note: "测试备注",
+            contactName: "张三",
             book: nil,
             contact: nil,
             context: context

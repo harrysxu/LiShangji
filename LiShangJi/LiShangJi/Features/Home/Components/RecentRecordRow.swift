@@ -25,7 +25,7 @@ struct RecentRecordRow: View {
             // 联系人 & 事件
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: AppConstants.Spacing.xs) {
-                    Text(record.contact?.name ?? "未知")
+                    Text(record.displayName)
                         .font(.headline)
                         .foregroundStyle(Color.theme.textPrimary)
                     Text("·")

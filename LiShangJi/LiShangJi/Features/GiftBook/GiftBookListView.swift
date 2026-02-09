@@ -115,9 +115,7 @@ struct GiftBookListView: View {
             viewModel.loadBooks(context: modelContext)
         }
         .navigationDestination(for: BookNavigationID.self) { navID in
-            if let book = books.first(where: { $0.id == navID.id }) {
-                GiftBookDetailView(book: book)
-            }
+            GiftBookDetailView(bookID: navID.id)
         }
         .sheet(isPresented: $showingCreateSheet) {
             GiftBookFormView()

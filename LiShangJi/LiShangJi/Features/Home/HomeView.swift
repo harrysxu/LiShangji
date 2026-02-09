@@ -208,7 +208,12 @@ struct HomeView: View {
                 LSJCard {
                     LazyVStack(spacing: 0) {
                         ForEach(viewModel.recentRecords, id: \.id) { record in
-                            RecentRecordRow(record: record)
+                            NavigationLink {
+                                RecordDetailView(record: record)
+                            } label: {
+                                RecentRecordRow(record: record)
+                            }
+                            .buttonStyle(.plain)
                             if record.id != viewModel.recentRecords.last?.id {
                                 Divider()
                                     .foregroundStyle(Color.theme.divider)

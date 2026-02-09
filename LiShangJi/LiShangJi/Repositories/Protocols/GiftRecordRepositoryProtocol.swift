@@ -16,7 +16,7 @@ protocol GiftRecordRepositoryProtocol {
     func fetchRecent(limit: Int, context: ModelContext) throws -> [GiftRecord]
     /// 获取指定日期范围内的记录（半开区间 [from, to)）
     func fetchByDateRange(from: Date, to: Date, context: ModelContext) throws -> [GiftRecord]
-    func create(amount: Double, direction: String, eventName: String, eventCategory: String, eventDate: Date, note: String, book: GiftBook?, contact: Contact?, context: ModelContext) throws -> GiftRecord
+    func create(amount: Double, direction: String, eventName: String, eventCategory: String, eventDate: Date, note: String, contactName: String, book: GiftBook?, contact: Contact?, context: ModelContext) throws -> GiftRecord
     func update(_ record: GiftRecord, context: ModelContext) throws
     func delete(_ record: GiftRecord, context: ModelContext) throws
     func totalSent(context: ModelContext) throws -> Double

@@ -201,6 +201,8 @@ struct ContactFormView: View {
     @State private var solarBirthday = Date()
 
     var editingContact: Contact? = nil
+    var initialName: String = ""
+    var onSave: ((Contact) -> Void)? = nil
 
     private var isEditing: Bool { editingContact != nil }
 
@@ -254,6 +256,8 @@ struct ContactFormView: View {
                     selectedRelation = contact.relationType
                     hasBirthday = contact.hasBirthday
                     solarBirthday = contact.solarBirthday
+                } else if !initialName.isEmpty && name.isEmpty {
+                    name = initialName
                 }
             }
         }
@@ -272,6 +276,7 @@ struct ContactFormView: View {
             contact.solarBirthday = solarBirthday
             contact.updatedAt = Date()
             try? modelContext.save()
+            onSave?(contact)
         } else {
             let contact = Contact(name: trimmedName, relation: selectedRelation.rawValue)
             contact.phone = phone
@@ -280,6 +285,7 @@ struct ContactFormView: View {
             contact.solarBirthday = solarBirthday
             modelContext.insert(contact)
             try? modelContext.save()
+            onSave?(contact)
         }
 
         HapticManager.shared.successNotification()

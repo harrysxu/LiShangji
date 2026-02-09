@@ -15,6 +15,7 @@ struct RecordDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
+    @State private var showingCreateContactSheet = false
     @State private var contactHistory: [GiftRecord] = []
 
     var body: some View {
@@ -76,6 +77,18 @@ struct RecordDetailView: View {
         } message: {
             Text("删除后不可恢复，确认删除这条 \(record.amount.currencyString) 的记录吗？")
         }
+        .sheet(isPresented: $showingCreateContactSheet) {
+            ContactFormView(initialName: record.contactName) { newContact in
+                // 关联到当前记录
+                record.contact = newContact
+                record.updatedAt = Date()
+                // 更新联系人缓存
+                newContact.updateCacheForAddedRecord(amount: record.amount, direction: record.direction)
+                try? modelContext.save()
+                // 重新加载往来历史
+                loadContactHistory()
+            }
+        }
     }
 
     // MARK: - 加载往来历史
@@ -111,9 +124,15 @@ struct RecordDetailView: View {
     private var detailSection: some View {
         LSJCard {
             VStack(spacing: 0) {
-                detailRow("联系人", value: record.contact?.name ?? "未知", icon: "person.fill")
-                Divider().foregroundStyle(Color.theme.divider)
-                detailRow("关系", value: record.contact?.relationType.displayName ?? "其他", icon: "person.2.fill")
+                // 联系人行
+                if let contact = record.contact {
+                    detailRow("联系人", value: contact.name, icon: "person.fill")
+                    Divider().foregroundStyle(Color.theme.divider)
+                    detailRow("关系", value: contact.relationType.displayName, icon: "person.2.fill")
+                } else {
+                    // 无联系人：显示 contactName + 创建联系人按钮
+                    contactNameRow
+                }
                 Divider().foregroundStyle(Color.theme.divider)
                 detailRow("事件", value: record.eventName, icon: record.giftEventCategory.icon)
                 Divider().foregroundStyle(Color.theme.divider)
@@ -132,6 +151,42 @@ struct RecordDetailView: View {
                 detailRow("录入方式", value: sourceDisplayName, icon: "pencil.circle")
             }
         }
+    }
+
+    // MARK: - 无联系人时的联系人行
+
+    private var contactNameRow: some View {
+        HStack(spacing: AppConstants.Spacing.md) {
+            Image(systemName: "person.fill")
+                .foregroundStyle(Color.theme.primary)
+                .frame(width: 24)
+            Text("联系人")
+                .font(.subheadline)
+                .foregroundStyle(Color.theme.textSecondary)
+            Spacer()
+            Text(record.contactName.isEmpty ? "未知" : record.contactName)
+                .font(.body)
+                .foregroundStyle(Color.theme.textPrimary)
+            if !record.contactName.isEmpty {
+                Button {
+                    showingCreateContactSheet = true
+                } label: {
+                    HStack(spacing: 2) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.caption)
+                        Text("创建")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.theme.primary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, AppConstants.Spacing.sm)
     }
 
     private func detailRow(_ label: String, value: String, icon: String) -> some View {

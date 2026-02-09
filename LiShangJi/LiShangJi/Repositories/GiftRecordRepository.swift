@@ -69,6 +69,7 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
         eventCategory: String,
         eventDate: Date,
         note: String,
+        contactName: String,
         book: GiftBook?,
         contact: Contact?,
         context: ModelContext
@@ -77,6 +78,7 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
         record.eventCategory = eventCategory
         record.eventDate = eventDate
         record.note = note
+        record.contactName = contactName
         record.book = book
         record.contact = contact
         context.insert(record)

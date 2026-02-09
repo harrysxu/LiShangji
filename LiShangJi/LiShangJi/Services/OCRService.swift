@@ -16,6 +16,8 @@ struct OCRRecognizedItem: Identifiable {
     var amount: Double
     var confidence: Float  // 0-1 置信度
     var isVerified: Bool = false
+    var isSelected: Bool = true  // 默认选中，用户可取消勾选
+    var matchedContact: Contact?  // 自动匹配或手动选择的联系人
 }
 
 /// OCR 识别服务

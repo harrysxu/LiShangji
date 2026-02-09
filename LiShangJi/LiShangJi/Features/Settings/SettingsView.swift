@@ -43,16 +43,9 @@ struct SettingsView: View {
                 NavigationLink {
                     EventListView()
                 } label: {
-                    settingsRow(icon: "bell.badge.fill", title: "事件提醒", color: Color.theme.warning)
+                    settingsRow(icon: "calendar.badge.clock", title: "事件与节日", color: Color.theme.warning)
                 }
                 .accessibilityIdentifier("settings_events")
-
-                NavigationLink {
-                    LunarCalendarView()
-                } label: {
-                    settingsRow(icon: "building.columns.fill", title: "农历与节日", color: Color.theme.warning)
-                }
-                .accessibilityIdentifier("settings_lunar")
             }
             .listRowBackground(Color.theme.card)
 
@@ -76,6 +69,13 @@ struct SettingsView: View {
                             .foregroundStyle(Color.theme.textSecondary)
                     }
                 }
+
+                NavigationLink {
+                    ClearDataView()
+                } label: {
+                    settingsRow(icon: "trash.fill", title: "清空数据", color: Color.theme.sent)
+                }
+                .accessibilityIdentifier("settings_clear_data")
             }
             .listRowBackground(Color.theme.card)
 

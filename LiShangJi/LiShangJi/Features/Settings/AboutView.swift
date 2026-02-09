@@ -20,18 +20,12 @@ struct AboutView: View {
 
             // Logo 区域
             VStack(spacing: AppConstants.Spacing.lg) {
-                Image(systemName: "book.closed.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Color.theme.primary)
+                Image("AppIconImage")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                     .frame(width: 100, height: 100)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.theme.primary.opacity(0.15), Color.theme.primary.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
                     .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
                     #if DEBUG
                     .onTapGesture {
                         devTapCount += 1

@@ -19,8 +19,12 @@ struct OCRScanView: View {
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showingResults = false
+    @State private var selectedBook: GiftBook?
+    @State private var contactPickerIndex: Int?  // 当前正在选择联系人的条目索引
+    @State private var showingBatchCreateConfirmation = false
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
+    @Query(sort: \Contact.name) private var allContacts: [Contact]
 
     var body: some View {
         NavigationStack {
@@ -40,10 +44,12 @@ struct OCRScanView: View {
                 }
                 if showingResults && !recognizedItems.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("全部保存") {
+                        let selectedCount = recognizedItems.filter(\.isSelected).count
+                        Button("保存(\(selectedCount))") {
                             saveAllRecords()
                         }
                         .fontWeight(.semibold)
+                        .disabled(selectedCount == 0)
                         .debounced()
                     }
                 }
@@ -59,6 +65,12 @@ struct OCRScanView: View {
                     processImage(image)
                 }
             }
+            .onAppear {
+                // 默认选中第一个账本
+                if selectedBook == nil {
+                    selectedBook = books.first
+                }
+            }
             .alert("识别失败", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -66,6 +78,30 @@ struct OCRScanView: View {
                 Button("确定") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
+            }
+            .sheet(isPresented: Binding(
+                get: { contactPickerIndex != nil },
+                set: { if !$0 { contactPickerIndex = nil } }
+            )) {
+                RecordContactPickerView { contact in
+                    if let index = contactPickerIndex, index < recognizedItems.count {
+                        recognizedItems[index].matchedContact = contact
+                    }
+                    contactPickerIndex = nil
+                }
+            }
+            .confirmationDialog("一键创建联系人", isPresented: $showingBatchCreateConfirmation) {
+                let count = recognizedItems.filter { $0.isSelected && $0.matchedContact == nil && !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                Button("创建 \(count) 个联系人并关联") {
+                    batchCreateContacts()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                let names = recognizedItems
+                    .filter { $0.isSelected && $0.matchedContact == nil && !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+                    .map(\.name)
+                    .joined(separator: "、")
+                Text("将为以下人员创建联系人：\(names)")
             }
         }
     }
@@ -118,7 +154,7 @@ struct OCRScanView: View {
             HStack {
                 Image(systemName: "info.circle.fill")
                     .foregroundStyle(Color.theme.info)
-                Text("请核对识别结果，点击可编辑")
+                Text("点击勾选框可取消不需要的条目")
                     .font(.caption)
                     .foregroundStyle(Color.theme.textSecondary)
                 Spacer()
@@ -148,40 +184,178 @@ struct OCRScanView: View {
                 Spacer()
             } else {
                 List {
-                    ForEach($recognizedItems) { $item in
-                        HStack(spacing: AppConstants.Spacing.md) {
-                            // 置信度指示
-                            Image(systemName: item.confidence > 0.8 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                                .foregroundStyle(item.confidence > 0.8 ? Color.theme.received : Color.theme.warning)
-                                .font(.body)
+                    // 账本选择
+                    Section {
+                        bookPicker
+                    }
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                TextField("姓名", text: $item.name)
-                                    .font(.headline)
-                                    .foregroundStyle(Color.theme.textPrimary)
-                                Text("置信度: \(Int(item.confidence * 100))%")
-                                    .font(.caption2)
-                                    .foregroundStyle(Color.theme.textSecondary)
+                    // 全选/取消全选
+                    Section {
+                        HStack {
+                            let allSelected = recognizedItems.allSatisfy(\.isSelected)
+                            Button {
+                                let newValue = !allSelected
+                                for index in recognizedItems.indices {
+                                    recognizedItems[index].isSelected = newValue
+                                }
+                            } label: {
+                                HStack(spacing: AppConstants.Spacing.sm) {
+                                    Image(systemName: allSelected ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(allSelected ? Color.theme.primary : Color.theme.textSecondary)
+                                    Text(allSelected ? "取消全选" : "全选")
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.theme.textPrimary)
+                                }
                             }
-
                             Spacer()
-
-                            HStack(spacing: 2) {
-                                Text("¥")
-                                    .font(.subheadline)
-                                    .foregroundStyle(Color.theme.textSecondary)
-                                TextField("金额", value: $item.amount, format: .number)
-                                    .font(.headline.bold().monospacedDigit())
-                                    .foregroundStyle(Color.theme.received)
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(width: 80)
-                            }
+                            Text("共 \(recognizedItems.count) 条，已选 \(recognizedItems.filter(\.isSelected).count) 条")
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.textSecondary)
                         }
                         .listRowBackground(Color.theme.card)
                     }
-                    .onDelete { indexSet in
-                        recognizedItems.remove(atOffsets: indexSet)
+
+                    // 一键创建联系人
+                    let unmatchedCount = recognizedItems.filter { $0.isSelected && $0.matchedContact == nil && !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                    if unmatchedCount > 0 {
+                        Section {
+                            Button {
+                                showingBatchCreateConfirmation = true
+                            } label: {
+                                HStack(spacing: AppConstants.Spacing.sm) {
+                                    Image(systemName: "person.badge.plus")
+                                        .foregroundStyle(.white)
+                                        .font(.subheadline)
+                                    Text("一键创建 \(unmatchedCount) 个联系人")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppConstants.Spacing.sm)
+                                .background(Color.theme.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+
+                    // 识别条目列表
+                    Section {
+                        ForEach(Array($recognizedItems.enumerated()), id: \.element.id) { index, $item in
+                            VStack(spacing: 0) {
+                                HStack(spacing: AppConstants.Spacing.md) {
+                                    // 勾选框
+                                    Button {
+                                        item.isSelected.toggle()
+                                    } label: {
+                                        Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(item.isSelected ? Color.theme.primary : Color.theme.textSecondary)
+                                            .font(.title3)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        TextField("姓名", text: $item.name)
+                                            .font(.headline)
+                                            .foregroundStyle(item.isSelected ? Color.theme.textPrimary : Color.theme.textSecondary)
+                                            .onChange(of: item.name) { _, newName in
+                                                // 姓名变化时重新匹配联系人
+                                                let trimmed = newName.trimmingCharacters(in: .whitespaces)
+                                                item.matchedContact = allContacts.first(where: { $0.name == trimmed })
+                                            }
+                                        HStack(spacing: 4) {
+                                            Image(systemName: item.confidence > 0.8 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                                                .foregroundStyle(item.confidence > 0.8 ? Color.theme.received : Color.theme.warning)
+                                                .font(.caption2)
+                                            Text("置信度: \(Int(item.confidence * 100))%")
+                                                .font(.caption2)
+                                                .foregroundStyle(Color.theme.textSecondary)
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    HStack(spacing: 2) {
+                                        Text("¥")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Color.theme.textSecondary)
+                                        TextField("金额", value: $item.amount, format: .number)
+                                            .font(.headline.bold().monospacedDigit())
+                                            .foregroundStyle(item.isSelected ? Color.theme.received : Color.theme.textSecondary)
+                                            .keyboardType(.decimalPad)
+                                            .multilineTextAlignment(.trailing)
+                                            .frame(width: 80)
+                                    }
+                                }
+
+                                // 联系人匹配状态
+                                HStack(spacing: AppConstants.Spacing.sm) {
+                                    // 占位，对齐勾选框宽度
+                                    Color.clear.frame(width: 22)
+
+                                    if let contact = item.matchedContact {
+                                        // 已匹配联系人
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.fill.checkmark")
+                                                .font(.caption2)
+                                                .foregroundStyle(Color.theme.received)
+                                            Text(contact.name)
+                                                .font(.caption)
+                                                .foregroundStyle(Color.theme.textPrimary)
+                                            if contact.name != item.name {
+                                                Text("(模糊匹配)")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(Color.theme.warning)
+                                            }
+                                            Button {
+                                                item.matchedContact = nil
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(Color.theme.textSecondary.opacity(0.6))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.theme.received.opacity(0.1))
+                                        .clipShape(Capsule())
+                                    } else {
+                                        // 未关联
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.slash")
+                                                .font(.caption2)
+                                                .foregroundStyle(Color.theme.textSecondary)
+                                            Text("未关联联系人")
+                                                .font(.caption)
+                                                .foregroundStyle(Color.theme.textSecondary)
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    Button {
+                                        contactPickerIndex = index
+                                    } label: {
+                                        HStack(spacing: 2) {
+                                            Image(systemName: "person.crop.rectangle.stack")
+                                                .font(.caption)
+                                            Text("选择")
+                                                .font(.caption)
+                                        }
+                                        .foregroundStyle(Color.theme.primary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.top, 4)
+                            }
+                            .opacity(item.isSelected ? 1.0 : 0.5)
+                            .listRowBackground(Color.theme.card)
+                        }
+                        .onDelete { indexSet in
+                            recognizedItems.remove(atOffsets: indexSet)
+                        }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -190,14 +364,38 @@ struct OCRScanView: View {
         }
     }
 
+    // MARK: - 账本选择器
+
+    private var bookPicker: some View {
+        HStack {
+            Image(systemName: "book.closed.fill")
+                .foregroundStyle(Color.theme.primary)
+            Text("保存到账本")
+                .font(.subheadline)
+                .foregroundStyle(Color.theme.textPrimary)
+            Spacer()
+            Picker("账本", selection: $selectedBook) {
+                Text("不关联账本").tag(nil as GiftBook?)
+                ForEach(books) { book in
+                    Text(book.name).tag(book as GiftBook?)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Color.theme.primary)
+        }
+        .listRowBackground(Color.theme.card)
+    }
+
     // MARK: - 处理图片
 
     private func processImage(_ image: UIImage) {
         isProcessing = true
         Task {
             do {
-                let items = try await OCRService.shared.recognizeGiftList(from: image)
+                var items = try await OCRService.shared.recognizeGiftList(from: image)
                 await MainActor.run {
+                    // 自动匹配联系人
+                    autoMatchContacts(&items)
                     recognizedItems = items
                     showingResults = true
                     isProcessing = false
@@ -213,24 +411,62 @@ struct OCRScanView: View {
         }
     }
 
+    // MARK: - 自动匹配联系人
+
+    private func autoMatchContacts(_ items: inout [OCRRecognizedItem]) {
+        for index in items.indices {
+            let name = items[index].name.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            // 精确匹配优先
+            if let exactMatch = allContacts.first(where: { $0.name == name }) {
+                items[index].matchedContact = exactMatch
+            } else if let fuzzyMatch = allContacts.first(where: { $0.name.contains(name) || name.contains($0.name) }) {
+                // 模糊匹配：包含关系
+                items[index].matchedContact = fuzzyMatch
+            }
+        }
+    }
+
+    // MARK: - 批量创建联系人
+
+    private func batchCreateContacts() {
+        let contactRepository = ContactRepository()
+        var createdCount = 0
+
+        for index in recognizedItems.indices {
+            let item = recognizedItems[index]
+            let trimmedName = item.name.trimmingCharacters(in: .whitespaces)
+            guard item.isSelected, item.matchedContact == nil, !trimmedName.isEmpty else { continue }
+            do {
+                let newContact = try contactRepository.create(
+                    name: trimmedName,
+                    relation: RelationType.other.rawValue,
+                    phone: "",
+                    context: modelContext
+                )
+                recognizedItems[index].matchedContact = newContact
+                createdCount += 1
+            } catch {
+                continue
+            }
+        }
+
+        if createdCount > 0 {
+            try? modelContext.save()
+            HapticManager.shared.successNotification()
+        }
+    }
+
     // MARK: - 批量保存
 
     private func saveAllRecords() {
         let recordRepository = GiftRecordRepository()
-        let contactRepository = ContactRepository()
-        let defaultBook = books.first
+        let targetBook = selectedBook
 
-        for item in recognizedItems where item.amount > 0 && !item.name.isEmpty {
+        // 只保存选中的条目
+        for item in recognizedItems where item.isSelected && item.amount > 0 && !item.name.isEmpty {
             do {
-                // 查找或创建联系人
-                let existingContacts = try contactRepository.search(query: item.name, context: modelContext)
-                let contact = existingContacts.first ?? {
-                    let newContact = Contact(name: item.name)
-                    modelContext.insert(newContact)
-                    return newContact
-                }()
-
-                // 创建记录（repository.create 已自动更新缓存）
+                // 创建记录：contactName 始终填充，contact 使用匹配到的联系人（可为 nil）
                 try recordRepository.create(
                     amount: item.amount,
                     direction: GiftDirection.received.rawValue,
@@ -238,8 +474,9 @@ struct OCRScanView: View {
                     eventCategory: EventCategory.other.rawValue,
                     eventDate: Date(),
                     note: "OCR 识别录入",
-                    book: defaultBook,
-                    contact: contact,
+                    contactName: item.name,
+                    book: targetBook,
+                    contact: item.matchedContact,
                     context: modelContext
                 )
             } catch {

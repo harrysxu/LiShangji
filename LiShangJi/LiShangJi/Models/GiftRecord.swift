@@ -19,6 +19,7 @@ final class GiftRecord {
     var eventCategory: String = "wedding"          // 事件类别
     var eventDate: Date = Date()                   // 事件日期
     var note: String = ""                          // 备注
+    var contactName: String = ""                   // 独立姓名，不依赖联系人
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -64,6 +65,14 @@ final class GiftRecord {
     /// 是否为收到
     var isReceived: Bool {
         direction == GiftDirection.received.rawValue
+    }
+
+    /// 显示名称：优先使用联系人名称，其次使用独立姓名
+    var displayName: String {
+        if let name = contact?.name, !name.isEmpty {
+            return name
+        }
+        return contactName.isEmpty ? "未知" : contactName
     }
 
     /// 来源显示名称

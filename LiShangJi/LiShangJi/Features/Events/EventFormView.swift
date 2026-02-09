@@ -18,6 +18,11 @@ struct EventFormView: View {
     /// 如果传入 event 则为编辑模式
     var editingEvent: EventReminder?
 
+    /// 快速创建预填数据
+    var prefillTitle: String?
+    var prefillDate: Date?
+    var prefillCategory: EventCategory?
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -62,6 +67,16 @@ struct EventFormView: View {
             .onAppear {
                 if let event = editingEvent {
                     viewModel.configure(with: event)
+                } else if let title = prefillTitle {
+                    viewModel.title = title
+                    if let date = prefillDate {
+                        viewModel.eventDate = date
+                    }
+                    if let category = prefillCategory {
+                        viewModel.selectedCategory = category
+                    }
+                    // 默认提前一天提醒
+                    viewModel.reminderOption = .oneDay
                 }
             }
             .sheet(isPresented: $showingContactPicker) {
