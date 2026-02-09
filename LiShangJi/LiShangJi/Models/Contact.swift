@@ -29,9 +29,18 @@ final class Contact {
     // MARK: - 系统通讯录关联
     var systemContactID: String = ""                // CNContact identifier
 
+    // MARK: - 缓存聚合字段（性能优化，避免每次遍历 records）
+    var cachedTotalReceived: Double = 0             // 缓存：总收到金额
+    var cachedTotalSent: Double = 0                 // 缓存：总送出金额
+    var cachedRecordCount: Int = 0                  // 缓存：记录总数
+
     // MARK: - 关系
     @Relationship(deleteRule: .nullify, inverse: \GiftRecord.contact)
     var records: [GiftRecord]? = []
+
+    /// 关联的事件提醒
+    @Relationship(deleteRule: .nullify)
+    var eventReminders: [EventReminder]? = []
 
     init(name: String, relation: String = "other") {
         self.id = UUID()
@@ -48,27 +57,57 @@ final class Contact {
         RelationType(rawValue: relation) ?? .other
     }
 
-    /// 总收到金额
+    /// 总收到金额（读取缓存）
     var totalReceived: Double {
-        (records ?? [])
-            .filter { $0.direction == GiftDirection.received.rawValue }
-            .reduce(0) { $0 + $1.amount }
+        cachedTotalReceived
     }
 
-    /// 总送出金额
+    /// 总送出金额（读取缓存）
     var totalSent: Double {
-        (records ?? [])
-            .filter { $0.direction == GiftDirection.sent.rawValue }
-            .reduce(0) { $0 + $1.amount }
+        cachedTotalSent
     }
 
     /// 人情差额（正数=对方欠我，负数=我欠对方）
     var balance: Double {
-        totalReceived - totalSent
+        cachedTotalReceived - cachedTotalSent
     }
 
-    /// 往来记录总数
+    /// 往来记录总数（读取缓存）
     var recordCount: Int {
-        (records ?? []).count
+        cachedRecordCount
+    }
+
+    // MARK: - 缓存更新方法
+
+    /// 重新计算并更新缓存的聚合字段
+    func recalculateCachedAggregates() {
+        let allRecords = records ?? []
+        cachedTotalReceived = allRecords
+            .filter { $0.direction == GiftDirection.received.rawValue }
+            .reduce(0) { $0 + $1.amount }
+        cachedTotalSent = allRecords
+            .filter { $0.direction == GiftDirection.sent.rawValue }
+            .reduce(0) { $0 + $1.amount }
+        cachedRecordCount = allRecords.count
+    }
+
+    /// 增量更新：添加一条记录后更新缓存
+    func updateCacheForAddedRecord(amount: Double, direction: String) {
+        if direction == GiftDirection.received.rawValue {
+            cachedTotalReceived += amount
+        } else {
+            cachedTotalSent += amount
+        }
+        cachedRecordCount += 1
+    }
+
+    /// 增量更新：删除一条记录后更新缓存
+    func updateCacheForRemovedRecord(amount: Double, direction: String) {
+        if direction == GiftDirection.received.rawValue {
+            cachedTotalReceived = max(0, cachedTotalReceived - amount)
+        } else {
+            cachedTotalSent = max(0, cachedTotalSent - amount)
+        }
+        cachedRecordCount = max(0, cachedRecordCount - 1)
     }
 }

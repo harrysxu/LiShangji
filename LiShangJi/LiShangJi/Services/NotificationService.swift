@@ -16,6 +16,7 @@ class NotificationService {
     // MARK: - 通知标识符前缀
     private let birthdayPrefix = "birthday_"
     private let festivalPrefix = "festival_"
+    private let eventPrefix = "event_"
     
     // MARK: - 权限管理
     
@@ -122,6 +123,75 @@ class NotificationService {
             } else {
                 print("节日提醒设置成功: \(festivalName) - \(reminderDate)")
             }
+        }
+    }
+    
+    // MARK: - 事件提醒
+    
+    /// 设置事件提醒
+    /// - Parameter event: 事件提醒模型
+    func scheduleEventReminder(event: EventReminder) {
+        let option = event.reminder
+        guard option != .none else { return }
+        
+        guard let reminderDate = option.reminderDate(for: event.eventDate),
+              reminderDate > Date() else {
+            print("事件提醒日期无效或已过期")
+            return
+        }
+        
+        let content = UNMutableNotificationContent()
+        content.title = "事件提醒"
+        content.body = "\(event.title) — \(formatDate(event.eventDate))"
+        if !event.contactNames.isEmpty && event.contactNames != "未关联联系人" {
+            content.body += "\n关联联系人: \(event.contactNames)"
+        }
+        content.sound = .default
+        content.badge = 1
+        content.userInfo = [
+            "type": "event",
+            "eventID": event.id.uuidString,
+            "eventTitle": event.title,
+            "eventDate": event.eventDate.timeIntervalSince1970
+        ]
+        
+        var dateComponents = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: reminderDate
+        )
+        // 全天事件默认上午 9 点提醒
+        if event.isAllDay && option == .atTime {
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+        }
+        
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let identifier = "\(eventPrefix)\(event.id.uuidString)"
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("设置事件提醒失败: \(error)")
+            } else {
+                print("事件提醒设置成功: \(event.title) - \(reminderDate)")
+            }
+        }
+    }
+    
+    /// 取消事件提醒
+    /// - Parameter eventID: 事件ID
+    func cancelEventReminder(eventID: UUID) {
+        let identifier = "\(eventPrefix)\(eventID.uuidString)"
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
+    
+    /// 重新调度事件提醒（编辑后调用）
+    /// - Parameter event: 更新后的事件提醒模型
+    func rescheduleEventReminder(event: EventReminder) {
+        cancelEventReminder(eventID: event.id)
+        if !event.isCompleted {
+            scheduleEventReminder(event: event)
         }
     }
     

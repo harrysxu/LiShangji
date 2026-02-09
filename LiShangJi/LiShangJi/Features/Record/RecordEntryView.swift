@@ -15,10 +15,12 @@ struct RecordEntryView: View {
     @State private var viewModel = RecordViewModel()
     @State private var showDatePicker = false
     @State private var showToast = false
+    @State private var showContactPicker = false
 
     var preselectedBook: GiftBook?
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
+    @Query(sort: \Contact.name) private var allContacts: [Contact]
 
     var body: some View {
         NavigationStack {
@@ -158,30 +160,72 @@ struct RecordEntryView: View {
                     Text("联系人")
                         .font(.caption)
                         .foregroundStyle(Color.theme.textSecondary)
-                    TextField("输入姓名", text: $viewModel.contactName)
-                        .font(.body)
-                        .accessibilityIdentifier("contact_name_field")
-                        .onChange(of: viewModel.contactName) { _, newValue in
-                            viewModel.searchContacts(query: newValue, context: modelContext)
+
+                    if let contact = viewModel.selectedContact {
+                        // 已选择联系人：显示标签
+                        HStack(spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: contact.avatarSystemName)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.theme.primary)
+                                Text(contact.name)
+                                    .font(.body)
+                                    .foregroundStyle(Color.theme.textPrimary)
+                                Button {
+                                    viewModel.clearSelectedContact()
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.theme.textSecondary.opacity(0.6))
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.theme.primary.opacity(0.1))
+                            .clipShape(Capsule())
+
+                            Spacer()
+
+                            Text("差额: \(contact.balance.balanceString)")
+                                .font(.caption)
+                                .foregroundStyle(contact.balance >= 0 ? Color.theme.received : Color.theme.sent)
                         }
+                    } else {
+                        // 未选择联系人：显示输入框
+                        TextField("输入姓名", text: $viewModel.contactName)
+                            .font(.body)
+                            .accessibilityIdentifier("contact_name_field")
+                            .onChange(of: viewModel.contactName) { _, newValue in
+                                viewModel.searchContacts(query: newValue, context: modelContext)
+                            }
+                    }
                 }
 
-                if let contact = viewModel.selectedContact {
-                    Text("差额: \(contact.balance.balanceString)")
-                        .font(.caption)
-                        .foregroundStyle(contact.balance >= 0 ? Color.theme.received : Color.theme.sent)
+                // 通讯录选择按钮
+                if viewModel.selectedContact == nil {
+                    Button {
+                        showContactPicker = true
+                    } label: {
+                        Image(systemName: "person.crop.rectangle.stack")
+                            .font(.title3)
+                            .foregroundStyle(Color.theme.primary)
+                    }
+                    .accessibilityIdentifier("contact_picker_button")
                 }
             }
             .padding(AppConstants.Spacing.md)
 
             // 联系人建议列表
-            if !viewModel.contactSuggestions.isEmpty {
+            if viewModel.selectedContact == nil && !viewModel.contactSuggestions.isEmpty {
                 Divider()
                 ForEach(viewModel.contactSuggestions, id: \.id) { contact in
                     Button {
                         viewModel.selectContact(contact)
                     } label: {
                         HStack {
+                            Image(systemName: contact.avatarSystemName)
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.primary)
                             Text(contact.name)
                                 .foregroundStyle(Color.theme.textPrimary)
                             Text(contact.relationType.displayName)
@@ -196,6 +240,12 @@ struct RecordEntryView: View {
                         .padding(.vertical, AppConstants.Spacing.sm)
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showContactPicker) {
+            RecordContactPickerView { contact in
+                viewModel.selectContact(contact)
+                showContactPicker = false
             }
         }
     }

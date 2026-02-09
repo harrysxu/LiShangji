@@ -74,7 +74,7 @@ struct TestDataGeneratorService {
         ("中秋往来", "moon.haze.fill", "#722ED1"),
         ("日常人情", "gift.fill", "#13C2C2"),
         ("公司同事", "briefcase.fill", "#2F54EB"),
-        ("老家亲戚", "figure.2.and.child", "#EB2F96"),
+        ("老家亲戚", "figure.and.child.holdinghands", "#EB2F96"),
         ("朋友往来", "person.2.fill", "#FA541C"),
     ]
 
@@ -121,7 +121,15 @@ struct TestDataGeneratorService {
         )
         result.recordsCreated = recordCount
 
-        // 4. 保存
+        // 4. 更新所有缓存聚合字段
+        for contact in contacts {
+            contact.recalculateCachedAggregates()
+        }
+        for book in books {
+            book.recalculateCachedAggregates()
+        }
+
+        // 5. 保存
         try? context.save()
 
         return result

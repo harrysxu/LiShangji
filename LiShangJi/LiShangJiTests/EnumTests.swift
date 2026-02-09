@@ -150,7 +150,7 @@ struct RelationTypeTests {
     }
 
     @Test func icons() {
-        #expect(RelationType.family.icon == "figure.2.and.child")
+        #expect(RelationType.family.icon == "figure.and.child.holdinghands")
         #expect(RelationType.colleague.icon == "briefcase.fill")
         #expect(RelationType.classmate.icon == "book.fill")
         #expect(RelationType.friend.icon == "person.2.fill")

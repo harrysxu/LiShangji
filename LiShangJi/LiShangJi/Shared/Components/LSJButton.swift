@@ -23,10 +23,17 @@ struct LSJButton: View {
     var isLoading: Bool = false
     let action: () -> Void
 
+    @State private var isDebouncing = false
+
     var body: some View {
         Button(action: {
+            guard !isDebouncing else { return }
+            isDebouncing = true
             HapticManager.shared.lightImpact()
             action()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isDebouncing = false
+            }
         }) {
             HStack(spacing: AppConstants.Spacing.sm) {
                 if isLoading {
@@ -51,7 +58,7 @@ struct LSJButton: View {
                     .strokeBorder(borderColor, lineWidth: style == .secondary ? 1 : 0)
             )
         }
-        .disabled(isLoading)
+        .disabled(isLoading || isDebouncing)
     }
 
     private var backgroundColor: Color {

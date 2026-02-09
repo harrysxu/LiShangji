@@ -44,6 +44,7 @@ struct OCRScanView: View {
                             saveAllRecords()
                         }
                         .fontWeight(.semibold)
+                        .debounced()
                     }
                 }
             }
@@ -128,6 +129,7 @@ struct OCRScanView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(Color.theme.primary)
+                .debounced()
             }
             .padding(AppConstants.Spacing.md)
             .background(Color.theme.card)
@@ -228,7 +230,7 @@ struct OCRScanView: View {
                     return newContact
                 }()
 
-                // 创建记录
+                // 创建记录（repository.create 已自动更新缓存）
                 try recordRepository.create(
                     amount: item.amount,
                     direction: GiftDirection.received.rawValue,

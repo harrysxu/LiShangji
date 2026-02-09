@@ -17,6 +17,7 @@ func makeTestContainer() throws -> ModelContainer {
         GiftRecord.self,
         Contact.self,
         GiftEvent.self,
+        EventReminder.self,
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     return try ModelContainer(for: schema, configurations: [config])
@@ -40,7 +41,7 @@ func makeTestBook(name: String = "测试账本", in context: ModelContext) -> Gi
     return book
 }
 
-/// 创建测试用 GiftRecord
+/// 创建测试用 GiftRecord（同时更新关联的缓存聚合字段）
 @MainActor
 func makeTestRecord(
     amount: Double = 1000,
@@ -56,6 +57,11 @@ func makeTestRecord(
     record.contact = contact
     record.eventDate = eventDate
     context.insert(record)
+
+    // 更新缓存聚合字段
+    contact?.updateCacheForAddedRecord(amount: amount, direction: direction)
+    book?.updateCacheForAddedRecord(amount: amount, direction: direction)
+
     try? context.save()
     return record
 }

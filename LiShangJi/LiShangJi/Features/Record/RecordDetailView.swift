@@ -15,11 +15,7 @@ struct RecordDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
-
-    private var contactHistory: [GiftRecord] {
-        guard let contact = record.contact else { return [] }
-        return (contact.records ?? []).sorted { $0.eventDate < $1.eventDate }
-    }
+    @State private var contactHistory: [GiftRecord] = []
 
     var body: some View {
         ScrollView {
@@ -36,11 +32,15 @@ struct RecordDetailView: View {
                 }
             }
             .padding(.horizontal, AppConstants.Spacing.lg)
+            .padding(.top, AppConstants.Spacing.md)
             .padding(.bottom, AppConstants.Spacing.xxxl)
         }
         .lsjPageBackground()
         .navigationTitle("记录详情")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            loadContactHistory()
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -60,7 +60,14 @@ struct RecordDetailView: View {
         }
         .confirmationDialog("确认删除", isPresented: $showingDeleteConfirmation) {
             Button("删除此记录", role: .destructive) {
+                // 删除前更新缓存
+                let amount = record.amount
+                let direction = record.direction
+                let contact = record.contact
+                let book = record.book
                 modelContext.delete(record)
+                contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
+                book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
                 try? modelContext.save()
                 HapticManager.shared.warningNotification()
                 dismiss()
@@ -69,6 +76,16 @@ struct RecordDetailView: View {
         } message: {
             Text("删除后不可恢复，确认删除这条 \(record.amount.currencyString) 的记录吗？")
         }
+    }
+
+    // MARK: - 加载往来历史
+
+    private func loadContactHistory() {
+        guard let contact = record.contact else {
+            contactHistory = []
+            return
+        }
+        contactHistory = (contact.records ?? []).sorted { $0.eventDate < $1.eventDate }
     }
 
     // MARK: - 金额头部
@@ -268,6 +285,7 @@ struct RecordEditView: View {
                     }
                     .disabled(amount.isEmpty || (Double(amount) ?? 0) <= 0)
                     .fontWeight(.semibold)
+                    .debounced()
                 }
             }
             .onAppear {
@@ -286,6 +304,9 @@ struct RecordEditView: View {
     private func saveChanges() {
         guard let parsedAmount = Double(amount), parsedAmount > 0 else { return }
 
+        let amountChanged = record.amount != parsedAmount
+        let directionChanged = record.direction != direction.rawValue
+
         record.amount = parsedAmount
         record.direction = direction.rawValue
         record.eventName = eventName
@@ -293,6 +314,12 @@ struct RecordEditView: View {
         record.eventDate = eventDate
         record.note = note
         record.updatedAt = Date()
+
+        // 如果金额或方向变化，重算关联缓存
+        if amountChanged || directionChanged {
+            record.contact?.recalculateCachedAggregates()
+            record.book?.recalculateCachedAggregates()
+        }
 
         try? modelContext.save()
         HapticManager.shared.successNotification()

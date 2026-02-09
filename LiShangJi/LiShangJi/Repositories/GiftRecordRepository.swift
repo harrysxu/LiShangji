@@ -80,6 +80,11 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
         record.book = book
         record.contact = contact
         context.insert(record)
+
+        // 增量更新缓存聚合字段
+        contact?.updateCacheForAddedRecord(amount: amount, direction: direction)
+        book?.updateCacheForAddedRecord(amount: amount, direction: direction)
+
         try context.save()
         return record
     }
@@ -89,8 +94,26 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
         try context.save()
     }
 
+    /// 更新记录金额/方向后，重算关联的 Contact 和 Book 缓存
+    func updateWithCacheRefresh(_ record: GiftRecord, context: ModelContext) throws {
+        record.updatedAt = Date()
+        record.contact?.recalculateCachedAggregates()
+        record.book?.recalculateCachedAggregates()
+        try context.save()
+    }
+
     func delete(_ record: GiftRecord, context: ModelContext) throws {
+        // 删除前更新缓存
+        let amount = record.amount
+        let direction = record.direction
+        let contact = record.contact
+        let book = record.book
+
         context.delete(record)
+
+        contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
+        book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
+
         try context.save()
     }
 

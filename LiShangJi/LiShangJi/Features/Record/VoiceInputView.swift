@@ -199,6 +199,7 @@ struct VoiceInputView: View {
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
                 }
+                .debounced()
 
                 if !voiceService.recognizedText.isEmpty && !voiceService.isRecording {
                     LSJButton(title: "确认并解析", style: .primary, icon: "text.magnifyingglass") {

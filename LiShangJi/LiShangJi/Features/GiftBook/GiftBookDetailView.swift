@@ -15,29 +15,12 @@ struct GiftBookDetailView: View {
     @Environment(NavigationRouter.self) private var router
     @State private var filterDirection: GiftDirection? = nil
     @State private var showingEditSheet = false
-    @State private var showingShareSheet = false
-    @State private var exportFileURL: URL?
+    @State private var exportShareItem: ExportShareItem?
     @State private var showExportError = false
 
-    private var records: [GiftRecord] {
-        let allRecords = book.records ?? []
-        if let filter = filterDirection {
-            return allRecords
-                .filter { $0.direction == filter.rawValue }
-                .sorted { $0.eventDate > $1.eventDate }
-        }
-        return allRecords.sorted { $0.eventDate > $1.eventDate }
-    }
-
-    /// 按月分组
-    private var groupedRecords: [(String, [GiftRecord])] {
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: records) { record in
-            let components = calendar.dateComponents([.year, .month], from: record.eventDate)
-            return "\(components.year ?? 2026)年\(components.month ?? 1)月"
-        }
-        return grouped.sorted { $0.key > $1.key }
-    }
+    // 缓存排序/过滤/分组结果，避免在 body 中重复计算
+    @State private var cachedRecords: [GiftRecord] = []
+    @State private var cachedGroupedRecords: [(String, [GiftRecord])] = []
 
     var body: some View {
         ScrollView {
@@ -49,7 +32,7 @@ struct GiftBookDetailView: View {
                 filterBar
 
                 // 记录列表
-                if records.isEmpty {
+                if cachedRecords.isEmpty {
                     LSJEmptyStateView(
                         icon: "tray",
                         title: "暂无记录",
@@ -60,7 +43,7 @@ struct GiftBookDetailView: View {
                         router.showingRecordEntry = true
                     }
                 } else {
-                    ForEach(groupedRecords, id: \.0) { month, monthRecords in
+                    ForEach(cachedGroupedRecords, id: \.0) { month, monthRecords in
                         VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
                             Text(month)
                                 .font(.subheadline.weight(.semibold))
@@ -70,7 +53,7 @@ struct GiftBookDetailView: View {
                             LSJCard {
                                 LazyVStack(spacing: 0) {
                                     ForEach(monthRecords, id: \.id) { record in
-                                        NavigationLink(value: record.id) {
+                                        NavigationLink(value: RecordNavigationID(id: record.id)) {
                                             recordRow(record)
                                         }
                                         .buttonStyle(.plain)
@@ -87,6 +70,7 @@ struct GiftBookDetailView: View {
                     }
                 }
             }
+            .padding(.top, AppConstants.Spacing.md)
             .padding(.bottom, AppConstants.Spacing.xxxl)
         }
         .lsjPageBackground()
@@ -105,21 +89,28 @@ struct GiftBookDetailView: View {
                 }
             }
         }
-        .navigationDestination(for: UUID.self) { recordID in
-            if let record = records.first(where: { $0.id == recordID }) {
+        .navigationDestination(for: RecordNavigationID.self) { navID in
+            if let record = cachedRecords.first(where: { $0.id == navID.id }) {
                 RecordDetailView(record: record)
             }
         }
         .sheet(isPresented: $showingEditSheet) {
             GiftBookFormView(editingBook: book)
         }
-        .sheet(isPresented: $showingShareSheet) {
-            if let url = exportFileURL {
-                ShareSheet(items: [url])
-            }
+        .sheet(item: $exportShareItem) { item in
+            ShareSheet(items: [item.url])
         }
         .alert("导出失败", isPresented: $showExportError) {
             Button("确定") {}
+        }
+        .onAppear {
+            recomputeRecords()
+        }
+        .onChange(of: filterDirection) { _, _ in
+            recomputeRecords()
+        }
+        .onChange(of: book.cachedRecordCount) { _, _ in
+            recomputeRecords()
         }
         .overlay(alignment: .bottomTrailing) {
             Button {
@@ -135,9 +126,33 @@ struct GiftBookDetailView: View {
                     .clipShape(Circle())
                     .shadow(color: Color.theme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
             }
+            .debounced()
             .padding(.trailing, AppConstants.Spacing.xl)
             .padding(.bottom, AppConstants.Spacing.xl)
         }
+    }
+
+    // MARK: - 计算并缓存记录
+
+    private func recomputeRecords() {
+        let allRecords = book.records ?? []
+        let filtered: [GiftRecord]
+        if let filter = filterDirection {
+            filtered = allRecords
+                .filter { $0.direction == filter.rawValue }
+                .sorted { $0.eventDate > $1.eventDate }
+        } else {
+            filtered = allRecords.sorted { $0.eventDate > $1.eventDate }
+        }
+        cachedRecords = filtered
+
+        // 按月分组
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: filtered) { record in
+            let components = calendar.dateComponents([.year, .month], from: record.eventDate)
+            return "\(components.year ?? 2026)年\(components.month ?? 1)月"
+        }
+        cachedGroupedRecords = grouped.sorted { $0.key > $1.key }
     }
 
     // MARK: - 导出
@@ -145,8 +160,7 @@ struct GiftBookDetailView: View {
     private func exportBookCSV() {
         do {
             let url = try ExportService.shared.exportBookToCSV(book: book)
-            exportFileURL = url
-            showingShareSheet = true
+            exportShareItem = ExportShareItem(url: url)
             HapticManager.shared.successNotification()
         } catch {
             showExportError = true

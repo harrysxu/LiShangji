@@ -11,6 +11,8 @@ import SwiftData
 @main
 struct LiShangJiApp: App {
     init() {
+        // 注册 UserDefaults 默认值（iCloud 同步默认关闭，用户可手动开启）
+        UserDefaults.standard.register(defaults: ["iCloudSyncEnabled": false])
         // 在所有视图创建之前配置 UIKit 外观，确保 TabBar / NavigationBar 背景色统一
         AppearanceConfigurator.configure()
     }
@@ -21,12 +23,23 @@ struct LiShangJiApp: App {
             GiftRecord.self,
             Contact.self,
             GiftEvent.self,
+            EventReminder.self,
         ])
+
+        // 根据用户偏好决定是否启用 iCloud 同步（默认关闭）
+        // 注意：object(forKey:) 返回 nil 表示用户从未设置过，此时默认关闭
+        let iCloudEnabled: Bool
+        if let value = UserDefaults.standard.object(forKey: "iCloudSyncEnabled") as? Bool {
+            iCloudEnabled = value
+        } else {
+            iCloudEnabled = false
+        }
+        let cloudKitDB: ModelConfiguration.CloudKitDatabase = iCloudEnabled ? .automatic : .none
 
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            cloudKitDatabase: .automatic
+            cloudKitDatabase: cloudKitDB
         )
 
         do {
@@ -57,9 +70,13 @@ struct LiShangJiApp: App {
             ZStack {
                 MainTabView()
                     .onAppear {
-                        // 初始化预设事件模板
                         let context = sharedModelContainer.mainContext
+
+                        // 初始化预设事件模板
                         SeedDataService.seedBuiltInEvents(context: context)
+
+                        // 一次性迁移：为已有数据重算缓存聚合字段
+                        migrateCachedAggregatesIfNeeded(context: context)
 
                         // 请求通知权限
                         Task {
@@ -73,6 +90,7 @@ struct LiShangJiApp: App {
                         }
                 }
             }
+            .environment(\.locale, Locale(identifier: "zh_CN"))
             .preferredColorScheme(preferredColorScheme)
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
@@ -90,6 +108,29 @@ struct LiShangJiApp: App {
             }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    /// 一次性迁移：为已有数据重算缓存聚合字段
+    private func migrateCachedAggregatesIfNeeded(context: ModelContext) {
+        let migrationKey = "didMigrateCachedAggregates_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        do {
+            let contacts = try context.fetch(FetchDescriptor<Contact>())
+            for contact in contacts {
+                contact.recalculateCachedAggregates()
+            }
+
+            let books = try context.fetch(FetchDescriptor<GiftBook>())
+            for book in books {
+                book.recalculateCachedAggregates()
+            }
+
+            try context.save()
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        } catch {
+            print("缓存聚合迁移失败: \(error)")
+        }
     }
 
     private func authenticateUser() {

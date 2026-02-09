@@ -17,6 +17,15 @@ struct StatisticsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.xl) {
+                // 页面标题
+                HStack(alignment: .bottom) {
+                    Text("统计")
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Color.theme.textPrimary)
+                    Spacer()
+                }
+                .padding(.top, AppConstants.Spacing.sm)
+
                 // 时间范围筛选
                 timeFilterSection
 

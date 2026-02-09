@@ -58,6 +58,13 @@ class RecordViewModel {
         contactSuggestions = []
     }
 
+    /// 清除已选联系人
+    func clearSelectedContact() {
+        selectedContact = nil
+        contactName = ""
+        contactSuggestions = []
+    }
+
     /// 保存记录
     func saveRecord(context: ModelContext) -> Bool {
         let trimmedAmount = parsedAmount

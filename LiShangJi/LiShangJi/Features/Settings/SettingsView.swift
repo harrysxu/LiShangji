@@ -15,14 +15,22 @@ struct SettingsView: View {
     @Environment(\.requestReview) private var requestReview
     @AppStorage("isAppLockEnabled") private var isAppLockEnabled = false
     @AppStorage("colorSchemePreference") private var colorSchemePreference = "system"
-    @State private var showingExportOptions = false
-    @State private var showingShareSheet = false
-    @State private var exportFileURL: URL?
-    @State private var showExportError = false
-    @State private var exportErrorMessage = ""
+    @AppStorage("iCloudSyncEnabled") private var iCloudSyncEnabled = false
 
     var body: some View {
-        List {
+        VStack(spacing: 0) {
+            // 页面标题
+            HStack(alignment: .bottom) {
+                Text("我的")
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(Color.theme.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, AppConstants.Spacing.lg)
+            .padding(.top, AppConstants.Spacing.sm)
+            .padding(.bottom, AppConstants.Spacing.md)
+
+            List {
             // 功能区
             Section {
                 NavigationLink {
@@ -31,6 +39,13 @@ struct SettingsView: View {
                     settingsRow(icon: "person.2.fill", title: "联系人管理", color: Color.theme.primary)
                 }
                 .accessibilityIdentifier("settings_contacts")
+
+                NavigationLink {
+                    EventListView()
+                } label: {
+                    settingsRow(icon: "bell.badge.fill", title: "事件提醒", color: Color.theme.warning)
+                }
+                .accessibilityIdentifier("settings_events")
 
                 NavigationLink {
                     LunarCalendarView()
@@ -43,19 +58,23 @@ struct SettingsView: View {
 
             // 数据管理
             Section {
-                Button {
-                    showingExportOptions = true
+                NavigationLink {
+                    DataExportView()
                 } label: {
                     settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
                 }
                 .accessibilityIdentifier("settings_export")
 
-                HStack {
-                    settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
-                    Spacer()
-                    Text("已开启")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.theme.textSecondary)
+                NavigationLink {
+                    ICloudSyncView()
+                } label: {
+                    HStack {
+                        settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
+                        Spacer()
+                        Text(iCloudSyncEnabled ? "已开启" : "已关闭")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.theme.textSecondary)
+                    }
                 }
             }
             .listRowBackground(Color.theme.card)
@@ -101,6 +120,7 @@ struct SettingsView: View {
                 } label: {
                     settingsRow(icon: "star.fill", title: "给我们评分", color: .yellow)
                 }
+                .debounced()
 
                 NavigationLink {
                     PrivacyPolicyView()
@@ -137,29 +157,9 @@ struct SettingsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        } // VStack
         .lsjPageBackground()
         .toolbar(.hidden, for: .navigationBar)
-        .confirmationDialog("导出数据", isPresented: $showingExportOptions) {
-            Button("导出全部记录 (CSV)") {
-                exportAllRecords()
-            }
-            Button("导出联系人 (CSV)") {
-                exportContacts()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("选择要导出的数据类型")
-        }
-        .sheet(isPresented: $showingShareSheet) {
-            if let url = exportFileURL {
-                ShareSheet(items: [url])
-            }
-        }
-        .alert("导出失败", isPresented: $showExportError) {
-            Button("确定") {}
-        } message: {
-            Text(exportErrorMessage)
-        }
     }
 
     // MARK: - 设置行
@@ -179,36 +179,15 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - 导出
-
-    private func exportAllRecords() {
-        do {
-            let url = try ExportService.shared.exportAllToCSV(context: modelContext)
-            exportFileURL = url
-            showingShareSheet = true
-            HapticManager.shared.successNotification()
-        } catch {
-            exportErrorMessage = error.localizedDescription
-            showExportError = true
-            HapticManager.shared.errorNotification()
-        }
-    }
-
-    private func exportContacts() {
-        do {
-            let url = try ExportService.shared.exportContactsToCSV(context: modelContext)
-            exportFileURL = url
-            showingShareSheet = true
-            HapticManager.shared.successNotification()
-        } catch {
-            exportErrorMessage = error.localizedDescription
-            showExportError = true
-            HapticManager.shared.errorNotification()
-        }
-    }
 }
 
 // MARK: - 系统分享面板
+
+/// 可标识的分享项，用于 sheet(item:) 驱动分享面板
+struct ExportShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]

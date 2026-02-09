@@ -31,7 +31,7 @@ enum RelationType: String, CaseIterable, Codable {
 
     var icon: String {
         switch self {
-        case .family: return "figure.2.and.child"
+        case .family: return "figure.and.child.holdinghands"
         case .colleague: return "briefcase.fill"
         case .classmate: return "book.fill"
         case .friend: return "person.2.fill"

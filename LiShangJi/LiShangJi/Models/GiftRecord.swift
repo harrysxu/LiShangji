@@ -24,6 +24,7 @@ final class GiftRecord {
 
     // MARK: - OCR/语音来源标记
     var source: String = "manual"                  // "manual" / "ocr" / "voice"
+    @Attribute(.externalStorage)
     var ocrImageData: Data = Data()                // OCR 原图（压缩后存储）
 
     // MARK: - 借贷专用字段

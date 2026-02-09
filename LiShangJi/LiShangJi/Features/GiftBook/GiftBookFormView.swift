@@ -136,6 +136,7 @@ struct GiftBookFormView: View {
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                     .fontWeight(.semibold)
+                    .debounced()
                 }
             }
             .onAppear {

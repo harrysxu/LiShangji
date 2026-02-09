@@ -17,8 +17,7 @@ struct GiftBookListView: View {
     @State private var editingBook: GiftBook?
     @State private var bookToDelete: GiftBook?
     @State private var showingDeleteConfirmation = false
-    @State private var showingExportShare = false
-    @State private var exportFileURL: URL?
+    @State private var exportShareItem: ExportShareItem?
     @State private var showExportError = false
     @Query(filter: #Predicate<GiftBook> { !$0.isArchived },
            sort: [SortDescriptor(\GiftBook.sortOrder), SortDescriptor(\GiftBook.createdAt, order: .reverse)])
@@ -32,6 +31,16 @@ struct GiftBookListView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.xl) {
+                // 页面标题
+                HStack(alignment: .bottom) {
+                    Text("账本")
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Color.theme.textPrimary)
+                    Spacer()
+                }
+                .padding(.top, AppConstants.Spacing.sm)
+                .padding(.horizontal, AppConstants.Spacing.lg)
+
                 if books.isEmpty {
                     LSJEmptyStateView(
                         icon: "book.closed",
@@ -44,7 +53,7 @@ struct GiftBookListView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: AppConstants.Spacing.lg) {
                         ForEach(books, id: \.id) { book in
-                            NavigationLink(value: book.id) {
+                            NavigationLink(value: BookNavigationID(id: book.id)) {
                                 bookCard(book)
                             }
                             .buttonStyle(.plain)
@@ -87,6 +96,7 @@ struct GiftBookListView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .debounced()
                         .accessibilityIdentifier("create_book_button")
                     }
                     .padding(.horizontal, AppConstants.Spacing.lg)
@@ -104,8 +114,8 @@ struct GiftBookListView: View {
         .refreshable {
             viewModel.loadBooks(context: modelContext)
         }
-        .navigationDestination(for: UUID.self) { bookID in
-            if let book = books.first(where: { $0.id == bookID }) {
+        .navigationDestination(for: BookNavigationID.self) { navID in
+            if let book = books.first(where: { $0.id == navID.id }) {
                 GiftBookDetailView(book: book)
             }
         }
@@ -141,10 +151,8 @@ struct GiftBookListView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .sheet(isPresented: $showingExportShare) {
-            if let url = exportFileURL {
-                ShareSheet(items: [url])
-            }
+        .sheet(item: $exportShareItem) { item in
+            ShareSheet(items: [item.url])
         }
         .alert("导出失败", isPresented: $showExportError) {
             Button("确定") {}
@@ -163,6 +171,7 @@ struct GiftBookListView: View {
                     .clipShape(Circle())
                     .shadow(color: Color.theme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
             }
+            .debounced()
             .padding(.trailing, AppConstants.Spacing.xl)
             .padding(.bottom, AppConstants.Spacing.xl)
         }
@@ -207,8 +216,7 @@ struct GiftBookListView: View {
     private func exportBook(_ book: GiftBook) {
         do {
             let url = try ExportService.shared.exportBookToCSV(book: book)
-            exportFileURL = url
-            showingExportShare = true
+            exportShareItem = ExportShareItem(url: url)
             HapticManager.shared.successNotification()
         } catch {
             showExportError = true

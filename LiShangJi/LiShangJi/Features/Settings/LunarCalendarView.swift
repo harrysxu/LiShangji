@@ -47,6 +47,7 @@ struct LunarCalendarView: View {
                 festivalSection
             }
             .padding(.horizontal, AppConstants.Spacing.lg)
+            .padding(.top, AppConstants.Spacing.md)
             .padding(.bottom, AppConstants.Spacing.xxxl)
         }
         .lsjPageBackground()

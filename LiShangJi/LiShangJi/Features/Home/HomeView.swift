@@ -14,12 +14,20 @@ struct HomeView: View {
     @Environment(NavigationRouter.self) private var router
     @State private var viewModel = HomeViewModel()
     @State private var showingAllRecords = false
-    @Query(sort: \GiftRecord.createdAt, order: .reverse)
-    private var allRecords: [GiftRecord]
+    @State private var showingEventList = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.xl) {
+                // 页面标题
+                HStack(alignment: .bottom) {
+                    Text("首页")
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Color.theme.textPrimary)
+                    Spacer()
+                }
+                .padding(.top, AppConstants.Spacing.sm)
+
                 // 收支概览卡片
                 DashboardCardView(
                     totalReceived: viewModel.totalReceived,
@@ -28,6 +36,9 @@ struct HomeView: View {
 
                 // 快捷操作
                 quickActions
+
+                // 即将到来的事件
+                upcomingEventsSection
 
                 // 最近记录
                 recentRecordsSection
@@ -43,11 +54,11 @@ struct HomeView: View {
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
-        .onChange(of: allRecords.count) {
-            viewModel.loadData(context: modelContext)
-        }
         .navigationDestination(isPresented: $showingAllRecords) {
-            RecordListView(records: allRecords, title: "全部记录")
+            AllRecordsListView()
+        }
+        .navigationDestination(isPresented: $showingEventList) {
+            EventListView()
         }
         .overlay(alignment: .bottomTrailing) {
             fabButton
@@ -92,6 +103,78 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - 即将到来的事件
+
+    private var upcomingEventsSection: some View {
+        Group {
+            if !viewModel.upcomingEvents.isEmpty {
+                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                    HStack {
+                        Text("即将到来的事件")
+                            .font(.headline)
+                            .foregroundStyle(Color.theme.textPrimary)
+                        Spacer()
+                        Button("查看全部") {
+                            showingEventList = true
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(Color.theme.primary)
+                        .debounced()
+                    }
+
+                    LSJCard {
+                        VStack(spacing: 0) {
+                            ForEach(viewModel.upcomingEvents) { event in
+                                HStack(spacing: AppConstants.Spacing.md) {
+                                    Image(systemName: event.category.icon)
+                                        .font(.caption)
+                                        .foregroundStyle(Color.theme.primary)
+                                        .frame(width: 28, height: 28)
+                                        .background(Color.theme.primary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(event.title)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(Color.theme.textPrimary)
+                                            .lineLimit(1)
+                                        Text(eventDateText(event))
+                                            .font(.caption)
+                                            .foregroundStyle(Color.theme.textSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    let days = event.daysUntilEvent
+                                    Text(days == 0 ? "今天" : "\(days)天后")
+                                        .font(.caption.weight(.semibold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(days <= 3 ? Color.theme.primary.opacity(0.15) : Color.theme.warning.opacity(0.15))
+                                        .foregroundStyle(days <= 3 ? Color.theme.primary : Color.theme.warning)
+                                        .clipShape(Capsule())
+                                }
+                                .padding(.vertical, AppConstants.Spacing.sm)
+
+                                if event.id != viewModel.upcomingEvents.last?.id {
+                                    Divider()
+                                        .foregroundStyle(Color.theme.divider)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func eventDateText(_ event: EventReminder) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日"
+        return formatter.string(from: event.eventDate)
+    }
+
     // MARK: - 最近记录区
 
     private var recentRecordsSection: some View {
@@ -107,6 +190,7 @@ struct HomeView: View {
                     }
                     .font(.subheadline)
                     .foregroundStyle(Color.theme.primary)
+                    .debounced()
                 }
             }
 
@@ -151,6 +235,7 @@ struct HomeView: View {
                 .clipShape(Circle())
                 .shadow(color: Color.theme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
         }
+        .debounced()
         .accessibilityIdentifier("fab_add_record")
         .padding(.trailing, AppConstants.Spacing.xl)
         .padding(.bottom, AppConstants.Spacing.xl)

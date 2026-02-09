@@ -46,7 +46,9 @@ struct ContactListView: View {
             } else {
                 List {
                     ForEach(filteredContacts, id: \.id) { contact in
-                        NavigationLink(value: contact.id) {
+                        NavigationLink {
+                            ContactDetailView(contact: contact)
+                        } label: {
                             contactRow(contact)
                         }
                         .listRowBackground(Color.theme.card)
@@ -70,11 +72,7 @@ struct ContactListView: View {
                     Image(systemName: "person.badge.plus")
                         .foregroundStyle(Color.theme.primary)
                 }
-            }
-        }
-        .navigationDestination(for: UUID.self) { contactID in
-            if let contact = contacts.first(where: { $0.id == contactID }) {
-                ContactDetailView(contact: contact)
+                .debounced()
             }
         }
         .sheet(isPresented: $showingAddContact) {
@@ -245,6 +243,7 @@ struct ContactFormView: View {
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                     .fontWeight(.semibold)
+                    .debounced()
                 }
             }
             .onAppear {

@@ -227,6 +227,7 @@ struct TestDataGeneratorView: View {
                     .fill(isGenerating ? Color.theme.primary.opacity(0.6) : Color.theme.primary)
             )
             .disabled(isGenerating)
+            .debounced()
 
             // 清除按钮
             Button {
@@ -247,6 +248,7 @@ struct TestDataGeneratorView: View {
                     .fill(Color.red.opacity(0.1))
             )
             .disabled(isGenerating)
+            .debounced()
         } header: {
             Label("操作", systemImage: "gearshape.fill")
         }

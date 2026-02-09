@@ -127,10 +127,17 @@ struct AmountKeypadView: View {
         }
     }
 
+    @State private var isSaveDebouncing = false
+
     private var saveButton: some View {
         Button(action: {
+            guard !isSaveDebouncing else { return }
+            isSaveDebouncing = true
             HapticManager.shared.mediumImpact()
             onSave()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isSaveDebouncing = false
+            }
         }) {
             Text("保存")
                 .font(.headline)

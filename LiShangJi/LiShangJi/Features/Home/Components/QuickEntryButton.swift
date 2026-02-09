@@ -14,10 +14,17 @@ struct QuickEntryButton: View {
     let color: Color
     let action: () -> Void
 
+    @State private var isDebouncing = false
+
     var body: some View {
         Button(action: {
+            guard !isDebouncing else { return }
+            isDebouncing = true
             HapticManager.shared.lightImpact()
             action()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isDebouncing = false
+            }
         }) {
             VStack(spacing: AppConstants.Spacing.sm) {
                 Image(systemName: icon)

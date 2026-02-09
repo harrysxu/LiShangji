@@ -7,6 +7,18 @@
 
 import SwiftUI
 
+// MARK: - 类型安全的导航 ID（避免多个 navigationDestination(for: UUID.self) 冲突）
+
+/// 账本导航 ID
+struct BookNavigationID: Hashable {
+    let id: UUID
+}
+
+/// 记录导航 ID
+struct RecordNavigationID: Hashable {
+    let id: UUID
+}
+
 /// Tab 导航枚举
 enum AppTab: String, CaseIterable {
     case home = "首页"
@@ -41,6 +53,9 @@ class NavigationRouter {
 
     /// 显示语音输入
     var showingVoiceInput = false
+
+    /// 显示新建事件 Sheet
+    var showingEventEntry = false
 
     /// 当前选中的账本（用于从录入回到账本详情）
     var selectedBookForEntry: GiftBook?
