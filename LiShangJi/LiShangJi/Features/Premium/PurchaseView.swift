@@ -26,6 +26,9 @@ struct PurchaseView: View {
                     // 价格与购买
                     purchaseSection
 
+                    // 法律声明
+                    legalSection
+
                     // 恢复购买
                     restoreSection
                 }
@@ -199,6 +202,36 @@ struct PurchaseView: View {
                 ProgressView("正在加载产品信息...")
                     .foregroundStyle(Color.theme.textSecondary)
                     .padding()
+            }
+        }
+    }
+
+    // MARK: - 法律声明
+
+    private var legalSection: some View {
+        VStack(spacing: AppConstants.Spacing.sm) {
+            if !premiumManager.isPremium {
+                Text("购买即表示您同意我们的")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+                +
+                Text("《用户协议》")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.primary)
+                +
+                Text("和")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+                +
+                Text("《隐私政策》")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.primary)
+
+                Text("付款将通过您的 Apple ID 账户处理\n一次性买断，无订阅，无自动续费\n如需退款，请联系 Apple 支持")
+                    .font(.caption2)
+                    .foregroundStyle(Color.theme.textSecondary.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
             }
         }
     }

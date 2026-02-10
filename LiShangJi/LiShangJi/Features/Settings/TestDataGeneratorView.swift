@@ -40,6 +40,9 @@ struct TestDataGeneratorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    // 高级版状态
+    private var premiumManager = PremiumManager.shared
+
     // 配置状态
     @State private var selectedVolume: TestDataVolume = .medium
     @State private var monthsRange: Double = 12
@@ -60,6 +63,9 @@ struct TestDataGeneratorView: View {
     var body: some View {
         NavigationStack {
             List {
+                // 高级版调试
+                premiumDebugSection
+
                 // 数据量选择
                 volumeSection
 
@@ -100,6 +106,49 @@ struct TestDataGeneratorView: View {
                 Text("所有数据已清除，内置事件模板已重新初始化。")
             }
         }
+    }
+
+    // MARK: - 高级版调试
+
+    private var premiumDebugSection: some View {
+        Section {
+            HStack {
+                Image(systemName: premiumManager.isPremium ? "crown.fill" : "crown")
+                    .foregroundStyle(premiumManager.isPremium ? Color.orange : Color.theme.textSecondary)
+                    .font(.title3)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("高级版状态")
+                        .font(.headline)
+                    Text(premiumManager.isPremium ? "已解锁 ✅" : "未解锁 ❌")
+                        .font(.caption)
+                        .foregroundStyle(premiumManager.isPremium ? Color.green : Color.theme.textSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    premiumManager.debugTogglePremium()
+                } label: {
+                    Text(premiumManager.isPremium ? "锁定" : "解锁")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppConstants.Radius.sm)
+                                .fill(premiumManager.isPremium ? Color.red : Color.theme.primary)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Label("高级版调试", systemImage: "ladybug.fill")
+        } footer: {
+            Text("切换高级版解锁状态，用于测试高级功能。重新启动 App 后仍然生效。")
+        }
+        .listRowBackground(Color.theme.card)
     }
 
     // MARK: - 数据量选择

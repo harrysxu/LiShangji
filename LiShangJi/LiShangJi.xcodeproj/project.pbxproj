@@ -28,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AEDF504E2F3B77080048FAD1 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		FDEC19102F35A9230082CF8C /* LiShangJi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LiShangJi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDEC19212F35A9240082CF8C /* LiShangJiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LiShangJiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDEC192B2F35A9240082CF8C /* LiShangJiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LiShangJiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -94,6 +95,7 @@
 		FDEC19072F35A9230082CF8C = {
 			isa = PBXGroup;
 			children = (
+				AEDF504E2F3B77080048FAD1 /* Products.storekit */,
 				FDEC19122F35A9230082CF8C /* LiShangJi */,
 				FDEC19242F35A9240082CF8C /* LiShangJiTests */,
 				FDEC192E2F35A9240082CF8C /* LiShangJiUITests */,

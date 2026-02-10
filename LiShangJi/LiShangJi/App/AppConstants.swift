@@ -64,5 +64,8 @@ enum AppConstants {
         static let appName = "礼尚记"
         static let slogan = "懂礼数，更懂你"
         static let version = "1.0"
+        static let developerEmail = "xuxiaolong@hey.com"
+        static let privacyPolicyURL = "https://xuxiaolong.github.io/LiShangji/privacy-policy.html"
+        static let termsOfServiceURL = "https://xuxiaolong.github.io/LiShangji/terms-of-service.html"
     }
 }

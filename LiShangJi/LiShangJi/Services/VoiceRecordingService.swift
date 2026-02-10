@@ -340,53 +340,7 @@ class VoiceRecordingService: ObservableObject {
         }
         
         let chineseAmount = String(text[amountRange])
-        return chineseNumberToDouble(chineseAmount)
-    }
-    
-    /// 中文数字转阿拉伯数字
-    private func chineseNumberToDouble(_ chinese: String) -> Double? {
-        let digitMap: [String: Int] = [
-            "零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
-            "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
-            "壹": 1, "贰": 2, "叁": 3, "肆": 4, "伍": 5,
-            "陆": 6, "柒": 7, "捌": 8, "玖": 9
-        ]
-        
-        let unitMap: [String: Int] = [
-            "十": 10, "拾": 10,
-            "百": 100, "佰": 100,
-            "千": 1000, "仟": 1000,
-            "万": 10000, "萬": 10000
-        ]
-        
-        var result: Double = 0
-        var currentNumber = 0
-        var tempResult = 0
-        
-        let characters = Array(chinese)
-        var i = 0
-        
-        while i < characters.count {
-            let char = String(characters[i])
-            
-            if let digit = digitMap[char] {
-                currentNumber = digit
-                i += 1
-            } else if let unit = unitMap[char] {
-                if currentNumber == 0 {
-                    currentNumber = 1
-                }
-                tempResult += currentNumber * unit
-                currentNumber = 0
-                i += 1
-            } else {
-                i += 1
-            }
-        }
-        
-        result = Double(tempResult + currentNumber)
-        
-        return result > 0 ? result : nil
+        return ChineseNumberParser.parse(chineseAmount)
     }
     
     /// 解析事件类型

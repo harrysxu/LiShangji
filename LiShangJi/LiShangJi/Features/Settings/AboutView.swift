@@ -61,6 +61,41 @@ struct AboutView: View {
             }
             .padding(.horizontal, AppConstants.Spacing.xl)
 
+            // 联系与反馈
+            VStack(spacing: AppConstants.Spacing.md) {
+                Button {
+                    if let url = URL(string: "mailto:\(AppConstants.Brand.developerEmail)") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: AppConstants.Spacing.sm) {
+                        Image(systemName: "envelope.fill")
+                            .font(.body)
+                        Text("联系开发者 / 反馈建议")
+                            .font(.subheadline)
+                    }
+                    .foregroundStyle(Color.theme.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.theme.primary.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
+                }
+
+                HStack(spacing: AppConstants.Spacing.lg) {
+                    if let privacyURL = URL(string: AppConstants.Brand.privacyPolicyURL) {
+                        Link("隐私政策", destination: privacyURL)
+                            .font(.caption)
+                            .foregroundStyle(Color.theme.textSecondary)
+                    }
+                    if let termsURL = URL(string: AppConstants.Brand.termsOfServiceURL) {
+                        Link("用户协议", destination: termsURL)
+                            .font(.caption)
+                            .foregroundStyle(Color.theme.textSecondary)
+                    }
+                }
+            }
+            .padding(.horizontal, AppConstants.Spacing.xl)
+
             Spacer()
 
             // 版本信息

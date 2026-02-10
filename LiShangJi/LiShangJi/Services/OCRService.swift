@@ -147,78 +147,7 @@ class OCRService {
     
     /// 中文大写数字转阿拉伯数字
     func chineseNumberToDouble(_ chinese: String) -> Double? {
-        let cleaned = chinese.replacingOccurrences(of: "元", with: "")
-            .replacingOccurrences(of: "圆", with: "")
-            .replacingOccurrences(of: "整", with: "")
-            .trimmingCharacters(in: .whitespaces)
-        
-        // 中文数字映射
-        let digitMap: [String: Int] = [
-            "零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
-            "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
-            "壹": 1, "贰": 2, "叁": 3, "肆": 4, "伍": 5,
-            "陆": 6, "柒": 7, "捌": 8, "玖": 9
-        ]
-        
-        let unitMap: [String: Int] = [
-            "十": 10, "拾": 10,
-            "百": 100, "佰": 100,
-            "千": 1000, "仟": 1000,
-            "万": 10000, "萬": 10000
-        ]
-        
-        // 处理简单格式：直接数字 + 单位
-        // 例如："一千"、"八百"、"陆佰"
-        var result: Double = 0
-        var currentNumber = 0
-        
-        let characters = Array(cleaned)
-        var i = 0
-        
-        while i < characters.count {
-            let char = String(characters[i])
-            
-            if let digit = digitMap[char] {
-                currentNumber = digit
-                i += 1
-                
-                // 检查后面是否有单位
-                if i < characters.count {
-                    let nextChar = String(characters[i])
-                    if let unit = unitMap[nextChar] {
-                        result += Double(currentNumber * unit)
-                        currentNumber = 0
-                        i += 1
-                    } else {
-                        // 没有单位，直接加数字
-                        result += Double(currentNumber)
-                        currentNumber = 0
-                    }
-                } else {
-                    // 最后一个字符是数字
-                    result += Double(currentNumber)
-                    currentNumber = 0
-                }
-            } else if let unit = unitMap[char] {
-                // 单独的单位，如"十"、"百"等
-                if currentNumber == 0 {
-                    currentNumber = 1
-                }
-                result += Double(currentNumber * unit)
-                currentNumber = 0
-                i += 1
-            } else {
-                i += 1
-            }
-        }
-        
-        // 处理剩余的数字
-        if currentNumber > 0 {
-            result += Double(currentNumber)
-        }
-        
-        // 如果结果大于0，返回结果
-        return result > 0 ? result : nil
+        ChineseNumberParser.parse(chinese)
     }
 }
 

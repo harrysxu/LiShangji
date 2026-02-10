@@ -58,6 +58,7 @@ struct LiShangJiApp: App {
     @State private var isLocked = UserDefaults.standard.bool(forKey: "isAppLockEnabled")
     @AppStorage("isAppLockEnabled") private var isAppLockEnabled = false
     @AppStorage("colorSchemePreference") private var colorSchemePreference = "system"
+    @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
 
     private var preferredColorScheme: ColorScheme? {
         switch colorSchemePreference {
@@ -70,26 +71,30 @@ struct LiShangJiApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                MainTabView()
-                    .onAppear {
-                        let context = sharedModelContainer.mainContext
+                if hasAgreedToTerms {
+                    MainTabView()
+                        .onAppear {
+                            let context = sharedModelContainer.mainContext
 
-                        // 初始化预设事件模板
-                        SeedDataService.seedBuiltInEvents(context: context)
+                            // 初始化预设事件模板
+                            SeedDataService.seedBuiltInEvents(context: context)
 
-                        // 一次性迁移：为已有数据重算缓存聚合字段
-                        migrateCachedAggregatesIfNeeded(context: context)
+                            // 一次性迁移：为已有数据重算缓存聚合字段
+                            migrateCachedAggregatesIfNeeded(context: context)
 
-                        // 请求通知权限
-                        Task {
-                            _ = await NotificationService.shared.requestPermission()
+                            // 请求通知权限
+                            Task {
+                                _ = await NotificationService.shared.requestPermission()
+                            }
                         }
+                    if isLocked && isAppLockEnabled {
+                        LSJBlurOverlay()
+                            .onTapGesture {
+                                authenticateUser()
+                            }
                     }
-                if isLocked && isAppLockEnabled {
-                    LSJBlurOverlay()
-                        .onTapGesture {
-                            authenticateUser()
-                        }
+                } else {
+                    OnboardingView(hasAgreedToTerms: $hasAgreedToTerms)
                 }
             }
             .environment(\.locale, Locale(identifier: "zh_CN"))

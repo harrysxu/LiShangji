@@ -113,7 +113,7 @@ struct ContactListView: View {
             }
         }
         .sheet(isPresented: $showingAddContact) {
-            AddContactSheet()
+            ContactFormView()
         }
         .sheet(isPresented: $showPurchaseView) {
             PurchaseView()
@@ -332,6 +332,3 @@ struct ContactFormView: View {
         dismiss()
     }
 }
-
-/// 保留旧名称的兼容别名
-typealias AddContactSheet = ContactFormView

@@ -183,4 +183,25 @@ final class PremiumManager {
         isPremium = premium
         UserDefaults.standard.set(premium, forKey: "isPremiumUnlocked")
     }
+
+    // MARK: - DEBUG 专用
+
+    #if DEBUG
+    /// 切换高级版状态（仅用于开发调试）
+    @MainActor
+    func debugTogglePremium() {
+        let newValue = !isPremium
+        isPremium = newValue
+        UserDefaults.standard.set(newValue, forKey: "isPremiumUnlocked")
+        print("🔧 [DEBUG] 高级版状态已切换为: \(newValue ? "✅ 已解锁" : "❌ 未解锁")")
+    }
+
+    /// 强制设置高级版状态（仅用于开发调试）
+    @MainActor
+    func debugSetPremium(_ premium: Bool) {
+        isPremium = premium
+        UserDefaults.standard.set(premium, forKey: "isPremiumUnlocked")
+        print("🔧 [DEBUG] 高级版状态已设置为: \(premium ? "✅ 已解锁" : "❌ 未解锁")")
+    }
+    #endif
 }
