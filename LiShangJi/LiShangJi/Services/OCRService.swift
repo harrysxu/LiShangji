@@ -171,7 +171,6 @@ class OCRService {
         // 例如："一千"、"八百"、"陆佰"
         var result: Double = 0
         var currentNumber = 0
-        var lastUnit = 1
         
         let characters = Array(cleaned)
         var i = 0
@@ -189,7 +188,6 @@ class OCRService {
                     if let unit = unitMap[nextChar] {
                         result += Double(currentNumber * unit)
                         currentNumber = 0
-                        lastUnit = unit
                         i += 1
                     } else {
                         // 没有单位，直接加数字
@@ -208,7 +206,6 @@ class OCRService {
                 }
                 result += Double(currentNumber * unit)
                 currentNumber = 0
-                lastUnit = unit
                 i += 1
             } else {
                 i += 1

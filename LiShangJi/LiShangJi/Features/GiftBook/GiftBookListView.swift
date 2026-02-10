@@ -19,9 +19,14 @@ struct GiftBookListView: View {
     @State private var showingDeleteConfirmation = false
     @State private var exportShareItem: ExportShareItem?
     @State private var showExportError = false
+    @State private var showPurchaseView = false
     @Query(filter: #Predicate<GiftBook> { !$0.isArchived },
            sort: [SortDescriptor(\GiftBook.sortOrder), SortDescriptor(\GiftBook.createdAt, order: .reverse)])
     private var books: [GiftBook]
+
+    private var canCreateBook: Bool {
+        PremiumManager.shared.isPremium || books.count < PremiumManager.FreeLimit.maxGiftBooks
+    }
 
     private let columns = [
         GridItem(.flexible(), spacing: AppConstants.Spacing.lg),
@@ -76,13 +81,17 @@ struct GiftBookListView: View {
 
                         // 新建账本卡片
                         Button {
-                            showingCreateSheet = true
+                            if canCreateBook {
+                                showingCreateSheet = true
+                            } else {
+                                showPurchaseView = true
+                            }
                         } label: {
                             VStack(spacing: AppConstants.Spacing.md) {
-                                Image(systemName: "plus")
+                                Image(systemName: canCreateBook ? "plus" : "lock.fill")
                                     .font(.title2)
                                     .foregroundStyle(Color.theme.primary.opacity(0.6))
-                                Text("新建账本")
+                                Text(canCreateBook ? "新建账本" : "升级解锁更多账本")
                                     .font(.subheadline)
                                     .foregroundStyle(Color.theme.textSecondary)
                             }
@@ -122,6 +131,9 @@ struct GiftBookListView: View {
         }
         .sheet(item: $editingBook) { book in
             GiftBookFormView(editingBook: book)
+        }
+        .sheet(isPresented: $showPurchaseView) {
+            PurchaseView()
         }
         .onAppear {
             viewModel.loadBooks(context: modelContext)

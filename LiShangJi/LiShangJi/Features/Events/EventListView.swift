@@ -19,6 +19,7 @@ struct EventListView: View {
     @State private var showingAddEvent = false
     @State private var showingStatistics = false
     @State private var selectedEvent: EventReminder?
+    @State private var showPurchaseView = false
     @AppStorage("lunarSectionExpanded") private var lunarSectionExpanded = true
 
     // 农历节日快速创建
@@ -28,6 +29,10 @@ struct EventListView: View {
     @State private var showingFestivalForm = false
 
     private let lunarService = LunarCalendarService.shared
+
+    private var canAddEvent: Bool {
+        PremiumManager.shared.isPremium || allEvents.count < PremiumManager.FreeLimit.maxEventReminders
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,7 +71,11 @@ struct EventListView: View {
                     .debounced()
 
                     Button {
-                        showingAddEvent = true
+                        if canAddEvent {
+                            showingAddEvent = true
+                        } else {
+                            showPurchaseView = true
+                        }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(Color.theme.primary)
@@ -117,6 +126,9 @@ struct EventListView: View {
             Button("确定") { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .sheet(isPresented: $showPurchaseView) {
+            PurchaseView()
         }
     }
 
@@ -656,7 +668,11 @@ struct EventListView: View {
                     subtitle: "点击右上角 + 创建第一个事件提醒",
                     actionTitle: "创建事件"
                 ) {
-                    showingAddEvent = true
+                    if canAddEvent {
+                        showingAddEvent = true
+                    } else {
+                        showPurchaseView = true
+                    }
                 }
                 .frame(maxWidth: .infinity)
             } else {

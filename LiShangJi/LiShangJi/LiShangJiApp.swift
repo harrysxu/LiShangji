@@ -15,6 +15,8 @@ struct LiShangJiApp: App {
         UserDefaults.standard.register(defaults: ["iCloudSyncEnabled": false])
         // 在所有视图创建之前配置 UIKit 外观，确保 TabBar / NavigationBar 背景色统一
         AppearanceConfigurator.configure()
+        // 初始化高级版购买管理器（触发 StoreKit 交易监听和权限检查）
+        _ = PremiumManager.shared
     }
 
     var sharedModelContainer: ModelContainer = {
@@ -53,7 +55,7 @@ struct LiShangJiApp: App {
     }()
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var isLocked = false
+    @State private var isLocked = UserDefaults.standard.bool(forKey: "isAppLockEnabled")
     @AppStorage("isAppLockEnabled") private var isAppLockEnabled = false
     @AppStorage("colorSchemePreference") private var colorSchemePreference = "system"
 

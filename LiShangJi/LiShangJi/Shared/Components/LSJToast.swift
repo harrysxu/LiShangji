@@ -63,8 +63,9 @@ struct ToastModifier: ViewModifier {
 
             if isPresented {
                 VStack {
+                    Spacer()
                     LSJToast(message: message, type: type)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
                         .onAppear {
                             DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
                                 withAnimation(.easeOut(duration: 0.3)) {
@@ -74,8 +75,8 @@ struct ToastModifier: ViewModifier {
                         }
                     Spacer()
                 }
-                .padding(.top, 50)
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPresented)
+                .allowsHitTesting(false)
             }
         }
     }

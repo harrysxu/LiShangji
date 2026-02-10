@@ -71,7 +71,7 @@ class LunarCalendarService {
     func solarToLunar(date: Date) -> (year: Int, month: Int, day: Int, isLeap: Bool, monthName: String, dayName: String, yearGanZhi: String, shengXiao: String) {
         let calendar = Calendar.current
         let components = calendar.dateComponents([.year, .month, .day], from: date)
-        guard let year = components.year, let month = components.month, let day = components.day else {
+        guard let year = components.year, let _ = components.month, let _ = components.day else {
             return (0, 0, 0, false, "", "", "", "")
         }
         
@@ -277,7 +277,7 @@ class LunarCalendarService {
     /// 获取农历年的总天数
     private func totalDaysInLunarYear(_ year: Int) -> Int {
         guard year >= 1900 && year < 1900 + lunarInfo.count else { return 0 }
-        let index = year - 1900
+        _ = year - 1900
         var total = 0
         
         for month in 1...12 {

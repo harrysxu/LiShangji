@@ -13,7 +13,12 @@ struct ContactListView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ContactViewModel()
     @State private var showingAddContact = false
+    @State private var showPurchaseView = false
     @Query(sort: \Contact.name) private var contacts: [Contact]
+
+    private var canAddContact: Bool {
+        PremiumManager.shared.isPremium || contacts.count < PremiumManager.FreeLimit.maxContacts
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,7 +38,11 @@ struct ContactListView: View {
                         subtitle: "记录人情时会自动创建联系人",
                         actionTitle: "添加联系人"
                     ) {
-                        showingAddContact = true
+                        if canAddContact {
+                            showingAddContact = true
+                        } else {
+                            showPurchaseView = true
+                        }
                     }
                 } else {
                     LSJEmptyStateView(
@@ -44,6 +53,30 @@ struct ContactListView: View {
                 }
                 Spacer()
             } else {
+                // 联系人数量限制提示
+                if !PremiumManager.shared.isPremium {
+                    HStack(spacing: AppConstants.Spacing.sm) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(Color.theme.warning)
+                            .font(.caption)
+                        Text("已使用 \(contacts.count)/\(PremiumManager.FreeLimit.maxContacts) 个联系人")
+                            .font(.caption)
+                            .foregroundStyle(Color.theme.textSecondary)
+                        Spacer()
+                        if !canAddContact {
+                            Button {
+                                showPurchaseView = true
+                            } label: {
+                                Text("升级")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.theme.primary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppConstants.Spacing.lg)
+                    .padding(.vertical, AppConstants.Spacing.xs)
+                }
+
                 List {
                     ForEach(filteredContacts, id: \.id) { contact in
                         NavigationLink {
@@ -67,7 +100,11 @@ struct ContactListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingAddContact = true
+                    if canAddContact {
+                        showingAddContact = true
+                    } else {
+                        showPurchaseView = true
+                    }
                 } label: {
                     Image(systemName: "person.badge.plus")
                         .foregroundStyle(Color.theme.primary)
@@ -77,6 +114,9 @@ struct ContactListView: View {
         }
         .sheet(isPresented: $showingAddContact) {
             AddContactSheet()
+        }
+        .sheet(isPresented: $showPurchaseView) {
+            PurchaseView()
         }
         .alert("出错了", isPresented: Binding(
             get: { viewModel.errorMessage != nil },

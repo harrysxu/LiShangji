@@ -19,13 +19,21 @@ struct VoiceRecordResult {
     var rawText: String
 }
 
+/// 语音权限状态
+enum VoicePermissionStatus {
+    case authorized
+    case notDetermined
+    case denied
+}
+
 /// 语音记账服务
 class VoiceRecordingService: ObservableObject {
     static let shared = VoiceRecordingService()
     
     @Published var isRecording = false
     @Published var recognizedText = ""
-    @Published var parsedResult: VoiceRecordResult?
+    @Published var parsedResults: [VoiceRecordResult] = []
+    @Published var lastError: String?
     
     private var audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -35,6 +43,19 @@ class VoiceRecordingService: ObservableObject {
     private init() {
         // 初始化中文语音识别器
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
+    }
+    
+    /// 检查当前权限状态
+    func checkPermissionStatus() -> VoicePermissionStatus {
+        let speechStatus = SFSpeechRecognizer.authorizationStatus()
+        switch speechStatus {
+        case .authorized:
+            return .authorized
+        case .notDetermined:
+            return .notDetermined
+        default:
+            return .denied
+        }
     }
     
     /// 请求权限
@@ -50,12 +71,17 @@ class VoiceRecordingService: ObservableObject {
         }
 
         // 请求麦克风权限
-        let micAuth = await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                continuation.resume(returning: granted)
+        if #available(iOS 17.0, *) {
+            let micAuth = await AVAudioApplication.requestRecordPermission()
+            return micAuth
+        } else {
+            let micAuth = await withCheckedContinuation { continuation in
+                AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                    continuation.resume(returning: granted)
+                }
             }
+            return micAuth
         }
-        return micAuth
     }
     
     /// 开始录音识别
@@ -83,8 +109,10 @@ class VoiceRecordingService: ObservableObject {
             throw VoiceRecordingError.requestCreationFailed
         }
         
-        // 尝试使用设备端识别（更快、更私密）
-        recognitionRequest.requiresOnDeviceRecognition = true
+        // 优先使用设备端识别（更快、更私密），不可用时回退到服务端识别
+        if recognizer.supportsOnDeviceRecognition {
+            recognitionRequest.requiresOnDeviceRecognition = true
+        }
         
         // 配置输入节点
         let inputNode = audioEngine.inputNode
@@ -109,16 +137,17 @@ class VoiceRecordingService: ObservableObject {
                     
                     // 实时解析结果
                     if result.isFinal {
-                        self.parsedResult = self.parseNaturalLanguage(bestTranscription)
+                        self.parsedResults = self.parseMultipleRecords(bestTranscription)
                     }
                 }
                 
                 if let error = error {
                     // 识别完成或出错
-                    if error.localizedDescription.contains("cancelled") {
-                        // 用户取消，不处理
-                    } else {
-                        print("语音识别错误: \(error.localizedDescription)")
+                    let nsError = error as NSError
+                    let isCancellation = error.localizedDescription.contains("cancelled")
+                        || (nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 216)
+                    if !isCancellation {
+                        self.lastError = "语音识别错误: \(error.localizedDescription)"
                     }
                     self.stopRecording()
                 }
@@ -145,8 +174,56 @@ class VoiceRecordingService: ObservableObject {
         isRecording = false
     }
     
-    /// 解析自然语言
-    func parseNaturalLanguage(_ text: String) -> VoiceRecordResult {
+    /// 将语音文本拆分为多条记录并逐条解析
+    func parseMultipleRecords(_ text: String) -> [VoiceRecordResult] {
+        // 按常见分隔符拆分：逗号、句号、分号、顿号、换行、"还有"、"然后"、"另外"
+        let separatorPattern = #"[，,。.；;、\n]|还有|然后|另外"#
+        let segments: [String]
+        if let regex = try? NSRegularExpression(pattern: separatorPattern, options: []) {
+            let nsText = text as NSString
+            var parts: [String] = []
+            var lastEnd = 0
+            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+            for match in matches {
+                let partRange = NSRange(location: lastEnd, length: match.range.location - lastEnd)
+                let part = nsText.substring(with: partRange).trimmingCharacters(in: .whitespaces)
+                if !part.isEmpty {
+                    parts.append(part)
+                }
+                lastEnd = match.range.location + match.range.length
+            }
+            // 最后一段
+            let remaining = nsText.substring(from: lastEnd).trimmingCharacters(in: .whitespaces)
+            if !remaining.isEmpty {
+                parts.append(remaining)
+            }
+            segments = parts
+        } else {
+            segments = [text]
+        }
+        
+        // 逐段解析，过滤掉无效片段（至少需要姓名或金额）
+        var results: [VoiceRecordResult] = []
+        for segment in segments {
+            let result = parseSingleRecord(segment)
+            if result.contactName != nil || result.amount != nil {
+                results.append(result)
+            }
+        }
+        
+        // 如果分段后没有有效结果，尝试整体解析
+        if results.isEmpty {
+            let wholeResult = parseSingleRecord(text)
+            if wholeResult.contactName != nil || wholeResult.amount != nil {
+                results.append(wholeResult)
+            }
+        }
+        
+        return results
+    }
+    
+    /// 解析单条自然语言记录
+    func parseSingleRecord(_ text: String) -> VoiceRecordResult {
         var result = VoiceRecordResult(rawText: text)
         
         // 解析方向（送/收到）

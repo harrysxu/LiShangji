@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FDEC1D5D2F3B42970082CF8C /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FDEC1D5C2F3B42970082CF8C /* StoreKit.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		FDEC19222F35A9240082CF8C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		FDEC19102F35A9230082CF8C /* LiShangJi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LiShangJi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDEC19212F35A9240082CF8C /* LiShangJiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LiShangJiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDEC192B2F35A9240082CF8C /* LiShangJiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LiShangJiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FDEC1D5C2F3B42970082CF8C /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -65,6 +70,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FDEC1D5D2F3B42970082CF8C /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -91,6 +97,7 @@
 				FDEC19122F35A9230082CF8C /* LiShangJi */,
 				FDEC19242F35A9240082CF8C /* LiShangJiTests */,
 				FDEC192E2F35A9240082CF8C /* LiShangJiUITests */,
+				FDEC1D5B2F3B42970082CF8C /* Frameworks */,
 				FDEC19112F35A9230082CF8C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -103,6 +110,14 @@
 				FDEC192B2F35A9240082CF8C /* LiShangJiUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FDEC1D5B2F3B42970082CF8C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				FDEC1D5C2F3B42970082CF8C /* StoreKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

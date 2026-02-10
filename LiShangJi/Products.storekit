@@ -1,0 +1,41 @@
+{
+  "identifier" : "F6F3FC11-B27A-4E89-B1CE-E4A8B5C7D2E1",
+  "type" : "Configuration",
+  "version" : 3,
+  "products" : [
+    {
+      "displayPrice" : "8",
+      "familyShareable" : true,
+      "internalID" : "1",
+      "localizations" : [
+        {
+          "description" : "一次购买，永久使用所有高级功能",
+          "displayName" : "礼尚记高级版",
+          "locale" : "zh_CN"
+        },
+        {
+          "description" : "One-time purchase for all premium features",
+          "displayName" : "LiShangJi Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.xxl.LiShangJi.premium",
+      "referenceName" : "Premium Unlock",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "1",
+    "_developerTeamID" : "3LSP26D33P",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "zh_CN",
+    "_storefront" : "CHN",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "cycleCount"
+      }
+    ]
+  }
+}

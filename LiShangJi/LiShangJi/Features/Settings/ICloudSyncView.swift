@@ -128,7 +128,7 @@ struct ICloudSyncView: View {
                         .foregroundStyle(Color.theme.textPrimary)
 
                     if let lastSync = syncService.lastSyncDate {
-                        Text("上次同步: \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+                        Text("上次同步: \(lastSync.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Locale(identifier: "zh_CN"))))")
                             .font(.caption)
                             .foregroundStyle(Color.theme.textSecondary)
                     }

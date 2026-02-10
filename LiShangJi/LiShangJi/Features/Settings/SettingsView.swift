@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage("isAppLockEnabled") private var isAppLockEnabled = false
     @AppStorage("colorSchemePreference") private var colorSchemePreference = "system"
     @AppStorage("iCloudSyncEnabled") private var iCloudSyncEnabled = false
+    @State private var showPurchaseView = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,24 +50,86 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.theme.card)
 
+            // 高级版入口
+            if !PremiumManager.shared.isPremium {
+                Section {
+                    Button {
+                        showPurchaseView = true
+                    } label: {
+                        HStack(spacing: AppConstants.Spacing.md) {
+                            Image(systemName: "crown.fill")
+                                .font(.body)
+                                .foregroundStyle(.white)
+                                .frame(width: 28, height: 28)
+                                .background(Color.theme.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("升级高级版")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(Color.theme.primary)
+                                Text("解锁 OCR、语音、图表等全部功能")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.theme.textSecondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.theme.primary)
+                        }
+                    }
+                }
+                .listRowBackground(Color.theme.primary.opacity(0.06))
+            }
+
             // 数据管理
             Section {
-                NavigationLink {
-                    DataExportView()
-                } label: {
-                    settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
+                if PremiumManager.shared.isPremium {
+                    NavigationLink {
+                        DataExportView()
+                    } label: {
+                        settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
+                    }
+                    .accessibilityIdentifier("settings_export")
+                } else {
+                    Button {
+                        showPurchaseView = true
+                    } label: {
+                        HStack {
+                            settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
+                            Spacer()
+                            Image(systemName: "crown.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.primary)
+                        }
+                    }
                 }
-                .accessibilityIdentifier("settings_export")
 
-                NavigationLink {
-                    ICloudSyncView()
-                } label: {
-                    HStack {
-                        settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
-                        Spacer()
-                        Text(iCloudSyncEnabled ? "已开启" : "已关闭")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.theme.textSecondary)
+                if PremiumManager.shared.isPremium {
+                    NavigationLink {
+                        ICloudSyncView()
+                    } label: {
+                        HStack {
+                            settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
+                            Spacer()
+                            Text(iCloudSyncEnabled ? "已开启" : "已关闭")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.theme.textSecondary)
+                        }
+                    }
+                } else {
+                    Button {
+                        showPurchaseView = true
+                    } label: {
+                        HStack {
+                            settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
+                            Spacer()
+                            Image(systemName: "crown.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.primary)
+                        }
                     }
                 }
 
@@ -160,6 +223,9 @@ struct SettingsView: View {
         } // VStack
         .lsjPageBackground()
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showPurchaseView) {
+            PurchaseView()
+        }
     }
 
     // MARK: - 设置行

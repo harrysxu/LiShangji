@@ -14,34 +14,39 @@ struct VoiceInputView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var voiceService = VoiceRecordingService.shared
     @State private var showingConfirmation = false
-    @State private var editableResult = EditableVoiceResult()
+    @State private var editableResults: [EditableVoiceResult] = []
     @State private var showToast = false
     @State private var errorMessage: String?
+    @State private var showPermissionAlert = false
+    @State private var contactPickerIndex: Int?  // 当前正在选择联系人的条目索引
+    @State private var showingBatchCreateConfirmation = false
+    @State private var isCreatingContacts = false  // 防止重复点击
+    @State private var showCreateToast = false
+    @State private var createToastMessage = ""
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
+    @Query(sort: \Contact.name) private var allContacts: [Contact]
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: AppConstants.Spacing.xl) {
-                Spacer()
+            ScrollView {
+                VStack(spacing: AppConstants.Spacing.xl) {
+                    // 语音波形区域
+                    voiceWaveArea
 
-                // 语音波形区域
-                voiceWaveArea
+                    // 识别文字显示
+                    recognizedTextArea
 
-                // 识别文字显示
-                recognizedTextArea
+                    // 解析结果
+                    if showingConfirmation {
+                        parsedResultForm
+                    }
 
-                // 解析结果
-                if showingConfirmation {
-                    parsedResultForm
+                    // 操作按钮
+                    actionButtons
                 }
-
-                Spacer()
-
-                // 操作按钮
-                actionButtons
+                .padding(AppConstants.Spacing.lg)
             }
-            .padding(AppConstants.Spacing.lg)
             .lsjPageBackground()
             .navigationTitle("语音记账")
             .navigationBarTitleDisplayMode(.inline)
@@ -53,7 +58,27 @@ struct VoiceInputView: View {
                     }
                 }
             }
-            .toast(isPresented: $showToast, message: "记录保存成功")
+            .toast(isPresented: $showToast, message: "\(editableResults.count)条记录保存成功")
+            .toast(isPresented: $showCreateToast, message: createToastMessage)
+            .sheet(item: Binding(
+                get: { contactPickerIndex.map { IdentifiableInt(value: $0) } },
+                set: { contactPickerIndex = $0?.value }
+            )) { item in
+                RecordContactPickerView { contact in
+                    editableResults[item.value].matchedContact = contact
+                    editableResults[item.value].contactName = contact.name
+                    contactPickerIndex = nil
+                }
+            }
+            .alert("确认创建联系人", isPresented: $showingBatchCreateConfirmation) {
+                Button("确认创建") {
+                    batchCreateContacts()
+                }
+                Button("取消", role: .cancel) { }
+            } message: {
+                let count = editableResults.filter { $0.matchedContact == nil && !$0.contactName.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                Text("将为 \(count) 个未关联的姓名创建新联系人")
+            }
             .alert("错误", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -61,6 +86,22 @@ struct VoiceInputView: View {
                 Button("确定") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
+            }
+            .alert("需要语音识别权限", isPresented: $showPermissionAlert) {
+                Button("前往设置") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("取消", role: .cancel) { }
+            } message: {
+                Text("请在设置中开启语音识别和麦克风权限，以使用语音记账功能")
+            }
+            .onChange(of: voiceService.lastError) { _, newError in
+                if let error = newError {
+                    errorMessage = error
+                    voiceService.lastError = nil
+                }
             }
         }
     }
@@ -128,17 +169,74 @@ struct VoiceInputView: View {
     // MARK: - 解析结果表单
 
     private var parsedResultForm: some View {
+        VStack(spacing: AppConstants.Spacing.md) {
+            HStack {
+                Text("解析结果")
+                    .font(.headline)
+                    .foregroundStyle(Color.theme.textPrimary)
+                Spacer()
+                Text("共\(editableResults.count)条")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+            }
+
+            // 一键创建联系人按钮
+            let unmatchedCount = editableResults.filter { $0.matchedContact == nil && !$0.contactName.trimmingCharacters(in: .whitespaces).isEmpty }.count
+            if unmatchedCount > 0 {
+                Button {
+                    showingBatchCreateConfirmation = true
+                } label: {
+                    HStack(spacing: AppConstants.Spacing.sm) {
+                        if isCreatingContacts {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "person.badge.plus")
+                                .foregroundStyle(.white)
+                                .font(.subheadline)
+                        }
+                        Text(isCreatingContacts ? "正在创建..." : "一键创建 \(unmatchedCount) 个联系人")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppConstants.Spacing.sm)
+                    .background(isCreatingContacts ? Color.theme.primary.opacity(0.5) : Color.theme.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+                }
+                .buttonStyle(.plain)
+                .disabled(isCreatingContacts)
+            }
+
+            ForEach(editableResults.indices, id: \.self) { index in
+                singleResultCard(index: index)
+            }
+        }
+    }
+
+    private func singleResultCard(index: Int) -> some View {
         LSJCard {
-            VStack(spacing: AppConstants.Spacing.md) {
+            VStack(spacing: AppConstants.Spacing.sm) {
                 HStack {
-                    Text("解析结果")
-                        .font(.headline)
-                        .foregroundStyle(Color.theme.textPrimary)
+                    Text("记录 \(index + 1)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.theme.textSecondary)
                     Spacer()
+                    if editableResults.count > 1 {
+                        Button {
+                            withAnimation {
+                                _ = editableResults.remove(at: index)
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(Color.theme.textSecondary)
+                        }
+                    }
                 }
 
                 // 方向
-                Picker("方向", selection: $editableResult.direction) {
+                Picker("方向", selection: $editableResults[index].direction) {
                     ForEach(GiftDirection.allCases, id: \.self) { dir in
                         Text(dir.displayName).tag(dir)
                     }
@@ -149,14 +247,76 @@ struct VoiceInputView: View {
                 HStack {
                     Image(systemName: "person.fill")
                         .foregroundStyle(Color.theme.primary)
-                    TextField("联系人", text: $editableResult.contactName)
+                    TextField("联系人", text: $editableResults[index].contactName)
+                        .onChange(of: editableResults[index].contactName) { _, newName in
+                            // 姓名变化时重新匹配联系人
+                            let trimmed = newName.trimmingCharacters(in: .whitespaces)
+                            editableResults[index].matchedContact = allContacts.first(where: { $0.name == trimmed })
+                        }
+                }
+
+                // 联系人匹配状态
+                HStack(spacing: AppConstants.Spacing.sm) {
+                    if let contact = editableResults[index].matchedContact {
+                        // 已匹配联系人
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.fill.checkmark")
+                                .font(.caption2)
+                                .foregroundStyle(Color.theme.received)
+                            Text(contact.name)
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.textPrimary)
+                            if contact.name != editableResults[index].contactName.trimmingCharacters(in: .whitespaces) {
+                                Text("(模糊匹配)")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.theme.warning)
+                            }
+                            Button {
+                                editableResults[index].matchedContact = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.theme.textSecondary.opacity(0.6))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.theme.received.opacity(0.1))
+                        .clipShape(Capsule())
+                    } else if !editableResults[index].contactName.trimmingCharacters(in: .whitespaces).isEmpty {
+                        // 未关联
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.slash")
+                                .font(.caption2)
+                                .foregroundStyle(Color.theme.textSecondary)
+                            Text("未关联联系人")
+                                .font(.caption)
+                                .foregroundStyle(Color.theme.textSecondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button {
+                        contactPickerIndex = index
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "person.crop.rectangle.stack")
+                                .font(.caption)
+                            Text("选择")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(Color.theme.primary)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 // 金额
                 HStack {
                     Image(systemName: "yensign.circle.fill")
                         .foregroundStyle(Color.theme.primary)
-                    TextField("金额", text: $editableResult.amountString)
+                    TextField("金额", text: $editableResults[index].amountString)
                         .keyboardType(.decimalPad)
                 }
 
@@ -164,7 +324,7 @@ struct VoiceInputView: View {
                 HStack {
                     Image(systemName: "sparkles")
                         .foregroundStyle(Color.theme.primary)
-                    Picker("事件类型", selection: $editableResult.eventCategory) {
+                    Picker("事件类型", selection: $editableResults[index].eventCategory) {
                         ForEach(EventCategory.allCases, id: \.self) { cat in
                             Text(cat.displayName).tag(cat)
                         }
@@ -179,8 +339,8 @@ struct VoiceInputView: View {
     private var actionButtons: some View {
         VStack(spacing: AppConstants.Spacing.md) {
             if showingConfirmation {
-                LSJButton(title: "保存记录", style: .primary, icon: "checkmark") {
-                    saveRecord()
+                LSJButton(title: "保存全部记录（\(editableResults.count)条）", style: .primary, icon: "checkmark") {
+                    saveRecords()
                 }
 
                 LSJButton(title: "重新录音", style: .secondary, icon: "arrow.counterclockwise") {
@@ -199,7 +359,6 @@ struct VoiceInputView: View {
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
                 }
-                .debounced()
 
                 if !voiceService.recognizedText.isEmpty && !voiceService.isRecording {
                     LSJButton(title: "确认并解析", style: .primary, icon: "text.magnifyingglass") {
@@ -217,66 +376,91 @@ struct VoiceInputView: View {
         if voiceService.isRecording {
             voiceService.stopRecording()
         } else {
-            do {
-                try voiceService.startRecording()
-            } catch {
-                errorMessage = "无法启动录音: \(error.localizedDescription)"
+            let permissionStatus = voiceService.checkPermissionStatus()
+            switch permissionStatus {
+            case .authorized:
+                startRecordingDirectly()
+            case .notDetermined:
+                Task {
+                    let granted = await voiceService.requestPermission()
+                    if granted {
+                        startRecordingDirectly()
+                    } else {
+                        showPermissionAlert = true
+                    }
+                }
+            case .denied:
+                showPermissionAlert = true
             }
+        }
+    }
+    
+    private func startRecordingDirectly() {
+        do {
+            try voiceService.startRecording()
+        } catch {
+            errorMessage = "无法启动录音: \(error.localizedDescription)"
         }
     }
 
     private func confirmAndParse() {
-        let result = voiceService.parseNaturalLanguage(voiceService.recognizedText)
+        let results = voiceService.parseMultipleRecords(voiceService.recognizedText)
 
-        editableResult.contactName = result.contactName ?? ""
-        editableResult.amountString = result.amount.map { String(Int($0)) } ?? ""
-        editableResult.direction = GiftDirection(rawValue: result.direction ?? "sent") ?? .sent
-        editableResult.eventCategory = EventCategory(rawValue: result.eventCategory ?? "other") ?? .other
+        editableResults = results.map { result in
+            EditableVoiceResult(
+                contactName: result.contactName ?? "",
+                amountString: result.amount.map { String(Int($0)) } ?? "",
+                direction: GiftDirection(rawValue: result.direction ?? "sent") ?? .sent,
+                eventCategory: EventCategory(rawValue: result.eventCategory ?? "other") ?? .other
+            )
+        }
+
+        // 如果没解析出任何结果，至少提供一条空记录供手动填写
+        if editableResults.isEmpty {
+            editableResults = [EditableVoiceResult()]
+        }
+
+        // 自动匹配联系人
+        autoMatchContacts()
 
         showingConfirmation = true
         HapticManager.shared.successNotification()
     }
 
-    private func saveRecord() {
-        guard let amount = Double(editableResult.amountString), amount > 0 else {
-            errorMessage = "请输入有效金额"
-            return
-        }
-        guard !editableResult.contactName.isEmpty else {
-            errorMessage = "请输入联系人"
-            return
+    private func saveRecords() {
+        // 校验所有记录
+        for (index, result) in editableResults.enumerated() {
+            guard let amount = Double(result.amountString), amount > 0 else {
+                errorMessage = "第\(index + 1)条记录：请输入有效金额"
+                return
+            }
+            guard !result.contactName.isEmpty else {
+                errorMessage = "第\(index + 1)条记录：请输入联系人"
+                return
+            }
         }
 
-        let contactRepository = ContactRepository()
         let recordRepository = GiftRecordRepository()
 
         do {
-            // 查找或创建联系人
-            let existing = try contactRepository.search(query: editableResult.contactName, context: modelContext)
-            let contact = existing.first ?? {
-                let c = Contact(name: editableResult.contactName)
-                modelContext.insert(c)
-                return c
-            }()
+            for result in editableResults {
+                let amount = Double(result.amountString) ?? 0
+                let eventName = "\(result.contactName)\(result.eventCategory.displayName)"
 
-            let eventName = "\(editableResult.contactName)\(editableResult.eventCategory.displayName)"
-
-            try recordRepository.create(
-                amount: amount,
-                direction: editableResult.direction.rawValue,
-                eventName: eventName,
-                eventCategory: editableResult.eventCategory.rawValue,
-                eventDate: Date(),
-                note: "语音录入: \(voiceService.recognizedText)",
-                contactName: editableResult.contactName,
-                book: books.first,
-                contact: contact,
-                context: modelContext
-            )
-
-            // 标记来源
-            // Note: source is set during init, we need to update it after creation
-            // This is handled by the record's source field default
+                // 使用已匹配的联系人（可为 nil），不再自动创建
+                try recordRepository.create(
+                    amount: amount,
+                    direction: result.direction.rawValue,
+                    eventName: eventName,
+                    eventCategory: result.eventCategory.rawValue,
+                    eventDate: Date(),
+                    note: "语音录入: \(voiceService.recognizedText)",
+                    contactName: result.contactName,
+                    book: books.first,
+                    contact: result.matchedContact,
+                    context: modelContext
+                )
+            }
 
             showToast = true
             HapticManager.shared.successNotification()
@@ -289,11 +473,76 @@ struct VoiceInputView: View {
         }
     }
 
+    // MARK: - 联系人匹配
+
+    /// 自动匹配联系人（精确匹配优先，其次模糊匹配）
+    private func autoMatchContacts() {
+        for index in editableResults.indices {
+            let name = editableResults[index].contactName.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            // 精确匹配优先
+            if let exactMatch = allContacts.first(where: { $0.name == name }) {
+                editableResults[index].matchedContact = exactMatch
+            } else if let fuzzyMatch = allContacts.first(where: { $0.name.contains(name) || name.contains($0.name) }) {
+                // 模糊匹配：包含关系
+                editableResults[index].matchedContact = fuzzyMatch
+            }
+        }
+    }
+
+    /// 批量创建未匹配的联系人
+    private func batchCreateContacts() {
+        guard !isCreatingContacts else { return }
+        isCreatingContacts = true
+
+        let contactRepository = ContactRepository()
+        var createdCount = 0
+
+        for index in editableResults.indices {
+            let result = editableResults[index]
+            let trimmedName = result.contactName.trimmingCharacters(in: .whitespaces)
+            guard result.matchedContact == nil, !trimmedName.isEmpty else { continue }
+            do {
+                let newContact = try contactRepository.create(
+                    name: trimmedName,
+                    relation: RelationType.other.rawValue,
+                    phone: "",
+                    context: modelContext
+                )
+                editableResults[index].matchedContact = newContact
+                createdCount += 1
+            } catch {
+                continue
+            }
+        }
+
+        if createdCount > 0 {
+            try? modelContext.save()
+            HapticManager.shared.successNotification()
+            createToastMessage = "成功创建 \(createdCount) 个联系人"
+            withAnimation {
+                showCreateToast = true
+            }
+        }
+
+        isCreatingContacts = false
+    }
+
     private func resetState() {
         showingConfirmation = false
         voiceService.recognizedText = ""
-        voiceService.parsedResult = nil
-        editableResult = EditableVoiceResult()
+        voiceService.parsedResults = []
+        editableResults = []
+    }
+}
+
+/// 用于 sheet(item:) 绑定的可识别整数包装
+private struct IdentifiableInt: Identifiable {
+    let id: Int
+    let value: Int
+    init(value: Int) {
+        self.id = value
+        self.value = value
     }
 }
 
@@ -303,4 +552,5 @@ struct EditableVoiceResult {
     var amountString: String = ""
     var direction: GiftDirection = .sent
     var eventCategory: EventCategory = .other
+    var matchedContact: Contact?  // 关联的联系人
 }

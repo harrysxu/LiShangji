@@ -22,6 +22,9 @@ struct OCRScanView: View {
     @State private var selectedBook: GiftBook?
     @State private var contactPickerIndex: Int?  // 当前正在选择联系人的条目索引
     @State private var showingBatchCreateConfirmation = false
+    @State private var isCreatingContacts = false  // 防止重复点击
+    @State private var showCreateToast = false
+    @State private var createToastMessage = ""
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
     @Query(sort: \Contact.name) private var allContacts: [Contact]
@@ -90,19 +93,20 @@ struct OCRScanView: View {
                     contactPickerIndex = nil
                 }
             }
-            .confirmationDialog("一键创建联系人", isPresented: $showingBatchCreateConfirmation) {
-                let count = recognizedItems.filter { $0.isSelected && $0.matchedContact == nil && !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }.count
-                Button("创建 \(count) 个联系人并关联") {
+            .alert("一键创建联系人", isPresented: $showingBatchCreateConfirmation) {
+                Button("确认创建") {
                     batchCreateContacts()
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                let names = recognizedItems
+                let allNames = recognizedItems
                     .filter { $0.isSelected && $0.matchedContact == nil && !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
-                    .map(\.name)
-                    .joined(separator: "、")
-                Text("将为以下人员创建联系人：\(names)")
+                    .map { $0.name.trimmingCharacters(in: .whitespaces) }
+                let displayNames = allNames.prefix(5).joined(separator: "、")
+                let suffix = allNames.count > 5 ? " 等\(allNames.count)人" : ""
+                Text("将为 \(allNames.count) 人创建联系人：\n\(displayNames)\(suffix)")
             }
+            .toast(isPresented: $showCreateToast, message: createToastMessage, type: .success)
         }
     }
 
@@ -223,19 +227,26 @@ struct OCRScanView: View {
                                 showingBatchCreateConfirmation = true
                             } label: {
                                 HStack(spacing: AppConstants.Spacing.sm) {
-                                    Image(systemName: "person.badge.plus")
-                                        .foregroundStyle(.white)
-                                        .font(.subheadline)
-                                    Text("一键创建 \(unmatchedCount) 个联系人")
+                                    if isCreatingContacts {
+                                        ProgressView()
+                                            .tint(.white)
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "person.badge.plus")
+                                            .foregroundStyle(.white)
+                                            .font(.subheadline)
+                                    }
+                                    Text(isCreatingContacts ? "正在创建..." : "一键创建 \(unmatchedCount) 个联系人")
                                         .font(.subheadline.weight(.medium))
                                         .foregroundStyle(.white)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, AppConstants.Spacing.sm)
-                                .background(Color.theme.primary)
+                                .background(isCreatingContacts ? Color.theme.primary.opacity(0.5) : Color.theme.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
                             }
                             .buttonStyle(.plain)
+                            .disabled(isCreatingContacts)
                             .listRowBackground(Color.clear)
                         }
                     }
@@ -430,6 +441,9 @@ struct OCRScanView: View {
     // MARK: - 批量创建联系人
 
     private func batchCreateContacts() {
+        guard !isCreatingContacts else { return }
+        isCreatingContacts = true
+
         let contactRepository = ContactRepository()
         var createdCount = 0
 
@@ -454,7 +468,13 @@ struct OCRScanView: View {
         if createdCount > 0 {
             try? modelContext.save()
             HapticManager.shared.successNotification()
+            createToastMessage = "成功创建 \(createdCount) 个联系人"
+            withAnimation {
+                showCreateToast = true
+            }
         }
+
+        isCreatingContacts = false
     }
 
     // MARK: - 批量保存

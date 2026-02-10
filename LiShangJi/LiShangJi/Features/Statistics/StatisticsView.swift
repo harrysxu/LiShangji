@@ -32,14 +32,19 @@ struct StatisticsView: View {
                 // 总览卡片
                 overviewSection
 
-                // 收支趋势图表
-                trendChartSection
+                if PremiumManager.shared.isPremium {
+                    // 收支趋势图表
+                    trendChartSection
 
-                // 关系分布
-                relationDistributionSection
+                    // 关系分布
+                    relationDistributionSection
 
-                // 往来排行
-                topContactsSection
+                    // 往来排行
+                    topContactsSection
+                } else {
+                    // 免费版：图表加锁
+                    premiumLockedChartsSection
+                }
             }
             .padding(.horizontal, AppConstants.Spacing.lg)
             .padding(.bottom, AppConstants.Spacing.xxxl)
@@ -264,6 +269,54 @@ struct StatisticsView: View {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - 高级版锁定区域
+
+    private var premiumLockedChartsSection: some View {
+        VStack(spacing: AppConstants.Spacing.lg) {
+            // 收支趋势 - 模糊
+            VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                Text("收支趋势")
+                    .font(.headline)
+                    .foregroundStyle(Color.theme.textPrimary)
+
+                LSJCard {
+                    emptyChartPlaceholder(icon: "chart.bar.fill", text: "")
+                }
+                .overlay {
+                    PremiumBlurOverlay()
+                }
+            }
+
+            // 关系分布 - 模糊
+            VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                Text("关系分布")
+                    .font(.headline)
+                    .foregroundStyle(Color.theme.textPrimary)
+
+                LSJCard {
+                    emptyChartPlaceholder(icon: "chart.pie.fill", text: "")
+                }
+                .overlay {
+                    PremiumBlurOverlay()
+                }
+            }
+
+            // 往来排行 - 模糊
+            VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                Text("往来排行")
+                    .font(.headline)
+                    .foregroundStyle(Color.theme.textPrimary)
+
+                LSJCard {
+                    emptyChartPlaceholder(icon: "person.3.fill", text: "")
+                }
+                .overlay {
+                    PremiumBlurOverlay()
                 }
             }
         }

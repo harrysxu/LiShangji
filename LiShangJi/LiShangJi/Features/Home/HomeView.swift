@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingAllRecords = false
     @State private var showingEventList = false
+    @State private var showPurchaseView = false
 
     var body: some View {
         ScrollView {
@@ -71,6 +72,9 @@ struct HomeView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .sheet(isPresented: $showPurchaseView) {
+            PurchaseView()
+        }
     }
 
     // MARK: - 快捷操作区
@@ -90,16 +94,26 @@ struct HomeView: View {
                 title: "扫一扫",
                 color: Color.theme.info
             ) {
-                router.showingOCRScanner = true
+                if PremiumManager.shared.isPremium {
+                    router.showingOCRScanner = true
+                } else {
+                    showPurchaseView = true
+                }
             }
+            .premiumBadge(isPremium: PremiumManager.shared.isPremium)
 
             QuickEntryButton(
                 icon: "mic.fill",
                 title: "说一说",
                 color: Color.theme.warning
             ) {
-                router.showingVoiceInput = true
+                if PremiumManager.shared.isPremium {
+                    router.showingVoiceInput = true
+                } else {
+                    showPurchaseView = true
+                }
             }
+            .premiumBadge(isPremium: PremiumManager.shared.isPremium)
         }
     }
 
