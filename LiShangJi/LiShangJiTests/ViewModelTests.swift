@@ -86,7 +86,7 @@ struct RecordViewModelTests {
         vm.amount = "1000"
         vm.contactName = "张三"
         vm.direction = .received
-        vm.selectedEventCategory = .wedding
+        vm.selectedCategoryName = "婚礼"
 
         let result = vm.saveRecord(context: context)
         #expect(result == true)
@@ -141,7 +141,7 @@ struct RecordViewModelTests {
         #expect(vm.contactName == "")
         #expect(vm.selectedContact == nil)
         #expect(vm.eventName == "")
-        #expect(vm.selectedEventCategory == .wedding)
+        #expect(vm.selectedCategoryName == "婚礼")
         #expect(vm.note == "")
         #expect(vm.errorMessage == nil)
         #expect(vm.isSaved == false)

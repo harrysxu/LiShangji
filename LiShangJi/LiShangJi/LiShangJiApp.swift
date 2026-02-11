@@ -26,6 +26,7 @@ struct LiShangJiApp: App {
             Contact.self,
             GiftEvent.self,
             EventReminder.self,
+            CategoryItem.self,
         ])
 
         // 根据用户偏好决定是否启用 iCloud 同步（默认关闭）
@@ -76,11 +77,17 @@ struct LiShangJiApp: App {
                         .onAppear {
                             let context = sharedModelContainer.mainContext
 
+                            // 初始化内置分类
+                            SeedDataService.seedBuiltInCategories(context: context)
+
                             // 初始化预设事件模板
                             SeedDataService.seedBuiltInEvents(context: context)
 
                             // 一次性迁移：为已有数据重算缓存聚合字段
                             migrateCachedAggregatesIfNeeded(context: context)
+
+                            // 监听远程同步通知，执行分类去重
+                            setupRemoteChangeObserver(context: context)
 
                             // 请求通知权限
                             Task {
@@ -137,6 +144,17 @@ struct LiShangJiApp: App {
             UserDefaults.standard.set(true, forKey: migrationKey)
         } catch {
             print("缓存聚合迁移失败: \(error)")
+        }
+    }
+
+    /// 监听远程同步通知，在数据变更时执行分类去重
+    private func setupRemoteChangeObserver(context: ModelContext) {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("NSPersistentStoreRemoteChangeNotification"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            SeedDataService.deduplicateCategories(context: context)
         }
     }
 

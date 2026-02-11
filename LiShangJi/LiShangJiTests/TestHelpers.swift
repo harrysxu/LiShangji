@@ -18,6 +18,7 @@ func makeTestContainer() throws -> ModelContainer {
         Contact.self,
         GiftEvent.self,
         EventReminder.self,
+        CategoryItem.self,
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     return try ModelContainer(for: schema, configurations: [config])

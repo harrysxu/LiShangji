@@ -11,11 +11,17 @@ import SwiftUI
 struct AmountKeypadView: View {
     @Binding var amount: String
     let onSave: () -> Void
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// 快捷金额选项
     private let quickAmounts: [String] = [
         "200", "500", "600", "666", "800", "888", "1000", "1200", "1666", "1888", "2000"
     ]
+
+    /// iPad 上使用更紧凑的按键高度，为表单内容留出更多空间
+    private var keyHeight: CGFloat {
+        horizontalSizeClass == .regular ? 44 : AppConstants.Keypad.keyMinSize
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,7 +104,7 @@ struct AmountKeypadView: View {
             Text(text)
                 .font(.title3.bold().monospacedDigit())
                 .frame(maxWidth: .infinity)
-                .frame(height: AppConstants.Keypad.keyMinSize)
+                .frame(height: keyHeight)
                 .background(Color.theme.card)
                 .foregroundStyle(Color.theme.textPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
@@ -120,7 +126,7 @@ struct AmountKeypadView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: AppConstants.Keypad.keyMinSize)
+            .frame(height: keyHeight)
             .background(Color.theme.card)
             .foregroundStyle(color)
             .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
@@ -142,7 +148,7 @@ struct AmountKeypadView: View {
             Text("保存")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
-                .frame(height: AppConstants.Keypad.keyMinSize)
+                .frame(height: keyHeight)
                 .background(Color.theme.primary)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))

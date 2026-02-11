@@ -134,7 +134,7 @@ struct RecordDetailView: View {
                     contactNameRow
                 }
                 Divider().foregroundStyle(Color.theme.divider)
-                detailRow("事件", value: record.eventName, icon: record.giftEventCategory.icon)
+                detailRow("事件", value: record.eventName, icon: CategoryItem.iconForName(record.eventCategory))
                 Divider().foregroundStyle(Color.theme.divider)
                 detailRow("日期", value: record.eventDate.chineseFullDate, icon: "calendar")
                 Divider().foregroundStyle(Color.theme.divider)
@@ -282,12 +282,17 @@ struct RecordEditView: View {
     let record: GiftRecord
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(filter: #Predicate<GiftBook> { !$0.isArchived }, sort: \GiftBook.sortOrder)
+    private var books: [GiftBook]
     @State private var amount: String = ""
     @State private var direction: GiftDirection = .sent
     @State private var eventName: String = ""
-    @State private var selectedEventCategory: EventCategory = .wedding
+    @Query(filter: #Predicate<CategoryItem> { $0.isVisible == true }, sort: \CategoryItem.sortOrder)
+    private var categories: [CategoryItem]
+    @State private var selectedCategoryName: String = "婚礼"
     @State private var eventDate: Date = Date()
     @State private var note: String = ""
+    @State private var selectedBook: GiftBook?
     @State private var showToast = false
 
     var body: some View {
@@ -314,14 +319,28 @@ struct RecordEditView: View {
                 Section("事件信息") {
                     TextField("事件名称", text: $eventName)
 
-                    Picker("事件类型", selection: $selectedEventCategory) {
-                        ForEach(EventCategory.allCases, id: \.self) { category in
-                            Label(category.displayName, systemImage: category.icon)
-                                .tag(category)
+                    Picker("事件类型", selection: $selectedCategoryName) {
+                        ForEach(categories, id: \.name) { category in
+                            Label(category.name, systemImage: category.icon)
+                                .tag(category.name)
                         }
                     }
 
                     DatePicker("日期", selection: $eventDate, displayedComponents: .date)
+                }
+
+                Section("账本") {
+                    if books.isEmpty {
+                        Text("无账本")
+                            .foregroundStyle(Color.theme.textSecondary)
+                    } else {
+                        Picker("账本", selection: $selectedBook) {
+                            Text("不选择").tag(nil as GiftBook?)
+                            ForEach(books, id: \.id) { book in
+                                Text(book.name).tag(book as GiftBook?)
+                            }
+                        }
+                    }
                 }
 
                 Section("备注") {
@@ -349,9 +368,10 @@ struct RecordEditView: View {
                     : String(record.amount)
                 direction = record.giftDirection
                 eventName = record.eventName
-                selectedEventCategory = record.giftEventCategory
+                selectedCategoryName = record.eventCategory
                 eventDate = record.eventDate
                 note = record.note
+                selectedBook = record.book
             }
         }
     }
@@ -361,18 +381,30 @@ struct RecordEditView: View {
 
         let amountChanged = record.amount != parsedAmount
         let directionChanged = record.direction != direction.rawValue
+        let bookChanged = record.book?.id != selectedBook?.id
+
+        // 如果账本发生变化，先从旧账本移除缓存
+        let oldBook = record.book
 
         record.amount = parsedAmount
         record.direction = direction.rawValue
         record.eventName = eventName
-        record.eventCategory = selectedEventCategory.rawValue
+        record.eventCategory = selectedCategoryName
         record.eventDate = eventDate
         record.note = note
+        record.book = selectedBook
         record.updatedAt = Date()
 
-        // 如果金额或方向变化，重算关联缓存
+        // 如果金额或方向变化，重算联系人缓存
         if amountChanged || directionChanged {
             record.contact?.recalculateCachedAggregates()
+        }
+
+        // 如果账本、金额或方向发生变化，重算相关账本缓存
+        if bookChanged {
+            oldBook?.recalculateCachedAggregates()
+            selectedBook?.recalculateCachedAggregates()
+        } else if amountChanged || directionChanged {
             record.book?.recalculateCachedAggregates()
         }
 

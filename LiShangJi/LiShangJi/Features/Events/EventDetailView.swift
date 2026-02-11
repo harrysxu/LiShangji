@@ -83,7 +83,7 @@ struct EventDetailView: View {
     private var headerSection: some View {
         VStack(spacing: AppConstants.Spacing.md) {
             // 类别图标
-            Image(systemName: event.category.icon)
+            Image(systemName: CategoryItem.iconForName(event.eventCategory))
                 .font(.system(size: 40))
                 .foregroundStyle(Color.theme.primary)
                 .frame(width: 80, height: 80)
@@ -98,10 +98,10 @@ struct EventDetailView: View {
 
             // 类别标签
             LSJTag(
-                text: event.category.displayName,
+                text: event.categoryDisplayName,
                 color: Color.theme.primary,
                 isSelected: true,
-                icon: event.category.icon
+                icon: CategoryItem.iconForName(event.eventCategory)
             )
 
             // 状态
@@ -139,7 +139,7 @@ struct EventDetailView: View {
                 Divider().foregroundStyle(Color.theme.divider)
                 infoRow(icon: "clock", label: "全天事件", value: event.isAllDay ? "是" : "否")
                 Divider().foregroundStyle(Color.theme.divider)
-                infoRow(icon: "tag", label: "事件类别", value: event.category.displayName)
+                infoRow(icon: "tag", label: "事件类别", value: event.categoryDisplayName)
                 Divider().foregroundStyle(Color.theme.divider)
                 infoRow(icon: "calendar.badge.clock", label: "创建时间", value: formattedCreatedDate)
             }

@@ -12,6 +12,7 @@ import SwiftData
 struct RecordEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel = RecordViewModel()
     @State private var showDatePicker = false
     @State private var showToast = false
@@ -21,28 +22,23 @@ struct RecordEntryView: View {
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
     @Query(sort: \Contact.name) private var allContacts: [Contact]
+    @Query(filter: #Predicate<CategoryItem> { $0.isVisible == true }, sort: \CategoryItem.sortOrder)
+    private var categories: [CategoryItem]
+
+    @State private var showCategoryManage = false
+
+    /// iPad 使用左右分栏布局
+    private var isRegularWidth: Bool {
+        horizontalSizeClass == .regular
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: AppConstants.Spacing.lg) {
-                        // 收到/送出切换
-                        directionPicker
-
-                        // 金额显示
-                        amountDisplay
-
-                        // 表单字段
-                        formFields
-                    }
-                    .padding(.horizontal, AppConstants.Spacing.lg)
-                    .padding(.top, AppConstants.Spacing.md)
-                }
-
-                // 金额键盘
-                AmountKeypadView(amount: $viewModel.amount) {
-                    save()
+            Group {
+                if isRegularWidth {
+                    iPadLayout
+                } else {
+                    iPhoneLayout
                 }
             }
             .lsjPageBackground()
@@ -65,6 +61,59 @@ struct RecordEntryView: View {
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
+        }
+    }
+
+    // MARK: - iPhone 布局（上下结构）
+
+    private var iPhoneLayout: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: AppConstants.Spacing.lg) {
+                    directionPicker
+                    amountDisplay
+                    formFields
+                }
+                .padding(.horizontal, AppConstants.Spacing.lg)
+                .padding(.top, AppConstants.Spacing.md)
+                .padding(.bottom, AppConstants.Spacing.md)
+            }
+
+            AmountKeypadView(amount: $viewModel.amount) {
+                save()
+            }
+        }
+    }
+
+    // MARK: - iPad 布局（左右分栏）
+
+    private var iPadLayout: some View {
+        HStack(spacing: 0) {
+            // 左侧：表单区域
+            ScrollView {
+                VStack(spacing: AppConstants.Spacing.lg) {
+                    directionPicker
+                    amountDisplay
+                    formFields
+                }
+                .padding(.horizontal, AppConstants.Spacing.lg)
+                .padding(.top, AppConstants.Spacing.md)
+                .padding(.bottom, AppConstants.Spacing.md)
+            }
+            .frame(maxWidth: .infinity)
+
+            Divider()
+
+            // 右侧：键盘区域
+            VStack(spacing: 0) {
+                Spacer()
+                AmountKeypadView(amount: $viewModel.amount) {
+                    save()
+                }
+                .frame(maxWidth: 360)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -265,24 +314,40 @@ struct RecordEntryView: View {
             .padding(.horizontal, AppConstants.Spacing.md)
             .padding(.top, AppConstants.Spacing.md)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppConstants.Spacing.sm) {
-                    ForEach(EventCategory.allCases, id: \.self) { category in
-                        LSJTag(
-                            text: category.displayName,
-                            color: Color.theme.primary,
-                            isSelected: viewModel.selectedEventCategory == category,
-                            icon: category.icon
-                        )
-                        .onTapGesture {
-                            HapticManager.shared.selection()
-                            viewModel.selectedEventCategory = category
-                        }
+            FlowLayout(spacing: AppConstants.Spacing.sm) {
+                ForEach(categories, id: \.name) { category in
+                    LSJTag(
+                        text: category.name,
+                        color: Color.theme.primary,
+                        isSelected: viewModel.selectedCategoryName == category.name,
+                        icon: category.icon
+                    )
+                    .onTapGesture {
+                        HapticManager.shared.selection()
+                        viewModel.selectedCategoryName = category.name
                     }
                 }
-                .padding(.horizontal, AppConstants.Spacing.md)
+
+                // 管理按钮
+                Button {
+                    showCategoryManage = true
+                } label: {
+                    LSJTag(
+                        text: "管理",
+                        color: Color.theme.textSecondary,
+                        isSelected: false,
+                        icon: "gearshape"
+                    )
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, AppConstants.Spacing.md)
             .padding(.bottom, AppConstants.Spacing.md)
+            .sheet(isPresented: $showCategoryManage) {
+                NavigationStack {
+                    CategoryManageView()
+                }
+            }
         }
     }
 

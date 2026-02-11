@@ -26,7 +26,7 @@ final class LiShangJiUITests: XCTestCase {
     @MainActor
     func testAppLaunches() throws {
         // 验证 App 成功启动，首页导航标题可见
-        let navTitle = app.navigationBars["礼尚记"]
+        let navTitle = app.navigationBars["随手礼"]
         XCTAssertTrue(navTitle.waitForExistence(timeout: 5), "首页导航标题应该可见")
     }
 
@@ -86,7 +86,7 @@ final class LiShangJiUITests: XCTestCase {
         tabBar.buttons["账本"].tap()
         tabBar.buttons["首页"].tap()
 
-        let navTitle = app.navigationBars["礼尚记"]
+        let navTitle = app.navigationBars["随手礼"]
         XCTAssertTrue(navTitle.waitForExistence(timeout: 3), "回到首页后导航标题应该可见")
     }
 
@@ -148,7 +148,7 @@ final class LiShangJiUITests: XCTestCase {
         cancelButton.tap()
 
         // 验证 Sheet 关闭
-        XCTAssertTrue(app.navigationBars["礼尚记"].waitForExistence(timeout: 3), "应该回到首页")
+        XCTAssertTrue(app.navigationBars["随手礼"].waitForExistence(timeout: 3), "应该回到首页")
     }
 
     // MARK: - 账本管理测试
@@ -232,7 +232,7 @@ final class LiShangJiUITests: XCTestCase {
         let navTitle = app.navigationBars["我的"]
         XCTAssertTrue(navTitle.waitForExistence(timeout: 3))
 
-        XCTAssertTrue(app.staticTexts["关于礼尚记"].exists, "关于礼尚记应该可见")
+        XCTAssertTrue(app.staticTexts["关于随手礼"].exists, "关于随手礼应该可见")
     }
 
     @MainActor
@@ -245,7 +245,7 @@ final class LiShangJiUITests: XCTestCase {
         let navTitle = app.navigationBars["我的"]
         XCTAssertTrue(navTitle.waitForExistence(timeout: 3))
 
-        XCTAssertTrue(app.staticTexts["礼尚记 v1.0"].exists, "版本号应该可见")
+        XCTAssertTrue(app.staticTexts["随手礼 v1.0"].exists, "版本号应该可见")
     }
 
     @MainActor

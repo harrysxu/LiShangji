@@ -246,12 +246,18 @@ struct TestDataGeneratorService {
                 let contact = contacts.randomElement()!
                 let amount = commonAmounts.randomElement()!
                 let direction: GiftDirection = Bool.random() ? .received : .sent
-                let eventCategory = EventCategory.allCases.randomElement()!
+                // 从数据库获取分类列表
+                let categoryDescriptor = FetchDescriptor<CategoryItem>(
+                    predicate: #Predicate<CategoryItem> { $0.isVisible == true },
+                    sortBy: [SortDescriptor(\.sortOrder)]
+                )
+                let categoryItems = (try? context.fetch(categoryDescriptor)) ?? []
+                let categoryName = categoryItems.randomElement()?.name ?? "其他"
 
                 let record = GiftRecord(
                     amount: amount,
                     direction: direction.rawValue,
-                    eventName: "\(contact.name)\(eventCategory.displayName)"
+                    eventName: "\(contact.name)\(categoryName)"
                 )
 
                 // 随机日期
@@ -262,7 +268,7 @@ struct TestDataGeneratorService {
                 record.updatedAt = record.eventDate
 
                 // 事件类别
-                record.eventCategory = eventCategory.rawValue
+                record.eventCategory = categoryName
 
                 // 记录类型 - 大部分是 gift，少量是 loan
                 if config.includeLoanRecords && Int.random(in: 0...9) == 0 { // ~10%
@@ -309,12 +315,14 @@ struct TestDataGeneratorService {
             try context.delete(model: GiftBook.self)
             try context.delete(model: Contact.self)
             try context.delete(model: GiftEvent.self)
+            try context.delete(model: CategoryItem.self)
             try context.save()
         } catch {
             print("清除数据失败: \(error)")
         }
 
-        // 重新初始化内置事件
+        // 重新初始化内置分类和事件
+        SeedDataService.seedBuiltInCategories(context: context)
         SeedDataService.seedBuiltInEvents(context: context)
     }
 

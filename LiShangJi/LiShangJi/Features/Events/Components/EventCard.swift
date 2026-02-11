@@ -26,7 +26,7 @@ struct EventCard: View {
             .buttonStyle(.plain)
 
             // 事件类别图标
-            Image(systemName: event.category.icon)
+            Image(systemName: CategoryItem.iconForName(event.eventCategory))
                 .font(.body)
                 .foregroundStyle(categoryColor)
                 .frame(width: 32, height: 32)
@@ -102,11 +102,11 @@ struct EventCard: View {
     // MARK: - 辅助
 
     private var categoryColor: Color {
-        switch event.category {
-        case .wedding: return Color.theme.primary
-        case .birthday, .firstBirthday: return Color.theme.warning
-        case .springFestival, .midAutumn, .dragonBoat: return .orange
-        case .funeral: return Color.theme.textSecondary
+        switch event.eventCategory {
+        case "婚礼": return Color.theme.primary
+        case "生日", "周岁": return Color.theme.warning
+        case "春节", "中秋", "端午": return .orange
+        case "丧事": return Color.theme.textSecondary
         default: return Color.theme.info
         }
     }

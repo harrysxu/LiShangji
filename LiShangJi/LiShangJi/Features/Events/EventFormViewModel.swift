@@ -14,7 +14,7 @@ class EventFormViewModel {
     // MARK: - 表单状态
     var title: String = ""
     var note: String = ""
-    var selectedCategory: EventCategory = .other
+    var selectedCategoryName: String = "其他"
     var eventDate: Date = Date()
     var isAllDay: Bool = true
     var reminderOption: ReminderOption = .none
@@ -37,7 +37,7 @@ class EventFormViewModel {
         editingEvent = event
         title = event.title
         note = event.note
-        selectedCategory = event.category
+        selectedCategoryName = event.eventCategory
         eventDate = event.eventDate
         isAllDay = event.isAllDay
         reminderOption = event.reminder
@@ -64,7 +64,7 @@ class EventFormViewModel {
                 // 更新现有事件
                 event.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
                 event.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                event.eventCategory = selectedCategory.rawValue
+                event.eventCategory = selectedCategoryName
                 event.eventDate = eventDate
                 event.isAllDay = isAllDay
                 event.reminderOption = reminderOption.rawValue
@@ -78,7 +78,7 @@ class EventFormViewModel {
                 // 新建事件
                 let event = try repository.create(
                     title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    eventCategory: selectedCategory.rawValue,
+                    eventCategory: selectedCategoryName,
                     eventDate: eventDate,
                     context: context
                 )

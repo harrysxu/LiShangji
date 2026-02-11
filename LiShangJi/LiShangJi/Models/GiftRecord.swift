@@ -16,7 +16,7 @@ final class GiftRecord {
     var direction: String = "sent"                 // "sent"(送出) / "received"(收到)
     var recordType: String = "gift"                // "gift"(赠与) / "loan"(借贷)
     var eventName: String = ""                     // 事件名称，如"张三婚礼"
-    var eventCategory: String = "wedding"          // 事件类别
+    var eventCategory: String = "婚礼"              // 事件类别（中文名）
     var eventDate: Date = Date()                   // 事件日期
     var note: String = ""                          // 备注
     var contactName: String = ""                   // 独立姓名，不依赖联系人
@@ -52,9 +52,9 @@ final class GiftRecord {
         GiftDirection(rawValue: direction) ?? .sent
     }
 
-    /// 事件类别枚举
-    var giftEventCategory: EventCategory {
-        EventCategory(rawValue: eventCategory) ?? .other
+    /// 事件类别显示名称（即 eventCategory 本身，现在直接存储中文名）
+    var eventCategoryDisplayName: String {
+        eventCategory
     }
 
     /// 记录类型枚举

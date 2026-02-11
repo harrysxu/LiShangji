@@ -85,7 +85,7 @@ struct DataExportView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .lsjPageBackground()
+        .background(Color.theme.background)
         .navigationTitle("导出数据")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $exportShareItem) { item in

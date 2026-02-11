@@ -146,16 +146,15 @@ struct GiftRecordModelTests {
         #expect(record.giftDirection == .sent) // 默认为 sent
     }
 
-    @Test func giftEventCategory() {
+    @Test func eventCategoryDisplayName() {
         let record = GiftRecord(amount: 500, direction: "sent", eventName: "测试")
-        record.eventCategory = "birthday"
-        #expect(record.giftEventCategory == .birthday)
+        record.eventCategory = "生日"
+        #expect(record.eventCategoryDisplayName == "生日")
     }
 
-    @Test func giftEventCategoryInvalid() {
+    @Test func eventCategoryDefaultValue() {
         let record = GiftRecord(amount: 500, direction: "sent", eventName: "测试")
-        record.eventCategory = "invalid"
-        #expect(record.giftEventCategory == .other) // 默认为 other
+        #expect(record.eventCategory == "婚礼") // 默认值
     }
 
     @Test func giftRecordType() {

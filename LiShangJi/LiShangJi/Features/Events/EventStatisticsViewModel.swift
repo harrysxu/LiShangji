@@ -11,7 +11,8 @@ import SwiftData
 /// 事件类别统计数据
 struct EventCategoryStat: Identifiable {
     let id = UUID()
-    let category: EventCategory
+    let categoryName: String
+    let categoryIcon: String
     let count: Int
     let completedCount: Int
 }
@@ -57,9 +58,13 @@ class EventStatisticsViewModel {
     private func loadCategoryStats(events: [EventReminder]) {
         let grouped = Dictionary(grouping: events) { $0.eventCategory }
         categoryStats = grouped.map { key, value in
-            let category = EventCategory(rawValue: key) ?? .other
             let completed = value.filter { $0.isCompleted }.count
-            return EventCategoryStat(category: category, count: value.count, completedCount: completed)
+            return EventCategoryStat(
+                categoryName: key,
+                categoryIcon: CategoryItem.iconForName(key),
+                count: value.count,
+                completedCount: completed
+            )
         }
         .sorted { $0.count > $1.count }
     }

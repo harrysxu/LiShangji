@@ -21,7 +21,7 @@ enum EventFilterType: String, CaseIterable {
 class EventViewModel {
     var searchQuery: String = ""
     var selectedFilter: EventFilterType = .all
-    var selectedCategory: EventCategory? = nil
+    var selectedCategoryName: String? = nil
     var errorMessage: String?
 
     private let repository = EventReminderRepository()
@@ -63,8 +63,8 @@ class EventViewModel {
         }
 
         // 类别过滤
-        if let category = selectedCategory {
-            result = result.filter { $0.eventCategory == category.rawValue }
+        if let categoryName = selectedCategoryName {
+            result = result.filter { $0.eventCategory == categoryName }
         }
 
         // 状态过滤

@@ -61,11 +61,11 @@ enum AppConstants {
     // MARK: - 品牌信息
 
     enum Brand {
-        static let appName = "礼尚记"
+        static let appName = "随手礼"
         static let slogan = "懂礼数，更懂你"
         static let version = "1.0"
-        static let developerEmail = "xuxiaolong@hey.com"
-        static let privacyPolicyURL = "https://harrysxu.github.io/LiShangji/privacy-policy.html"
-        static let termsOfServiceURL = "https://harrysxu.github.io/LiShangji/terms-of-service.html"
+        static let developerEmail = "ailehuoquan@163.com"
+        static let privacyPolicyURL = "https://harrysxu.github.io/LiShangji/pages/privacy-policy.html"
+        static let termsOfServiceURL = "https://harrysxu.github.io/LiShangji/pages/terms-of-service.html"
     }
 }

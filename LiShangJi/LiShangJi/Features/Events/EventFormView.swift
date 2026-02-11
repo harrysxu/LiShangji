@@ -18,10 +18,13 @@ struct EventFormView: View {
     /// 如果传入 event 则为编辑模式
     var editingEvent: EventReminder?
 
+    @Query(filter: #Predicate<CategoryItem> { $0.isVisible == true }, sort: \CategoryItem.sortOrder)
+    private var categories: [CategoryItem]
+
     /// 快速创建预填数据
     var prefillTitle: String?
     var prefillDate: Date?
-    var prefillCategory: EventCategory?
+    var prefillCategoryName: String?
 
     var body: some View {
         NavigationStack {
@@ -72,8 +75,8 @@ struct EventFormView: View {
                     if let date = prefillDate {
                         viewModel.eventDate = date
                     }
-                    if let category = prefillCategory {
-                        viewModel.selectedCategory = category
+                    if let categoryName = prefillCategoryName {
+                        viewModel.selectedCategoryName = categoryName
                     }
                     // 默认提前一天提醒
                     viewModel.reminderOption = .oneDay
@@ -113,22 +116,20 @@ struct EventFormView: View {
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
             sectionLabel("事件类别")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppConstants.Spacing.sm) {
-                    ForEach(EventCategory.allCases, id: \.self) { category in
-                        Button {
-                            HapticManager.shared.selection()
-                            viewModel.selectedCategory = category
-                        } label: {
-                            LSJTag(
-                                text: category.displayName,
-                                color: Color.theme.primary,
-                                isSelected: viewModel.selectedCategory == category,
-                                icon: category.icon
-                            )
-                        }
-                        .buttonStyle(.plain)
+            FlowLayout(spacing: AppConstants.Spacing.sm) {
+                ForEach(categories, id: \.name) { category in
+                    Button {
+                        HapticManager.shared.selection()
+                        viewModel.selectedCategoryName = category.name
+                    } label: {
+                        LSJTag(
+                            text: category.name,
+                            color: Color.theme.primary,
+                            isSelected: viewModel.selectedCategoryName == category.name,
+                            icon: category.icon
+                        )
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }

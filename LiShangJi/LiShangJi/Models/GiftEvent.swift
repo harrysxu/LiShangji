@@ -13,7 +13,7 @@ final class GiftEvent {
     // MARK: - 基本属性
     var id: UUID = UUID()
     var name: String = ""                           // 事件名称
-    var category: String = "wedding"                // 事件类别
+    var category: String = "婚礼"                   // 事件类别（中文名）
     var icon: String = "heart.fill"                 // SF Symbol
     var isBuiltIn: Bool = false                     // 是否为系统内置事件
     var sortOrder: Int = 0
@@ -28,8 +28,8 @@ final class GiftEvent {
         self.sortOrder = sortOrder
     }
 
-    /// 事件类别枚举
-    var eventCategory: EventCategory {
-        EventCategory(rawValue: category) ?? .other
+    /// 事件类别显示名称（即 category 本身，现在直接存储中文名）
+    var categoryDisplayName: String {
+        category
     }
 }

@@ -17,7 +17,7 @@ class RecordViewModel {
     var contactName: String = ""
     var selectedContact: Contact?
     var eventName: String = ""
-    var selectedEventCategory: EventCategory = .wedding
+    var selectedCategoryName: String = "婚礼"
     var eventDate: Date = Date()
     var selectedBook: GiftBook?
     var note: String = ""
@@ -93,7 +93,7 @@ class RecordViewModel {
 
             // 生成事件名称
             let finalEventName = eventName.isEmpty
-                ? "\(trimmedName)\(selectedEventCategory.displayName)"
+                ? "\(trimmedName)\(selectedCategoryName)"
                 : eventName
 
             // 创建记录
@@ -101,7 +101,7 @@ class RecordViewModel {
                 amount: trimmedAmount,
                 direction: direction.rawValue,
                 eventName: finalEventName,
-                eventCategory: selectedEventCategory.rawValue,
+                eventCategory: selectedCategoryName,
                 eventDate: eventDate,
                 note: note,
                 contactName: trimmedName,
@@ -127,7 +127,7 @@ class RecordViewModel {
         contactName = ""
         selectedContact = nil
         eventName = ""
-        selectedEventCategory = .wedding
+        selectedCategoryName = "婚礼"
         eventDate = Date()
         note = ""
         errorMessage = nil

@@ -403,7 +403,8 @@ struct OCRScanView: View {
         isProcessing = true
         Task {
             do {
-                var items = try await OCRService.shared.recognizeGiftList(from: image)
+                // 使用智能识别：AI 优先，正则回退
+                var items = try await OCRService.shared.smartRecognizeGiftList(from: image)
                 await MainActor.run {
                     // 自动匹配联系人
                     autoMatchContacts(&items)
@@ -491,7 +492,7 @@ struct OCRScanView: View {
                     amount: item.amount,
                     direction: GiftDirection.received.rawValue,
                     eventName: "\(item.name)的礼金",
-                    eventCategory: EventCategory.other.rawValue,
+                    eventCategory: "其他",
                     eventDate: Date(),
                     note: "OCR 识别录入",
                     contactName: item.name,

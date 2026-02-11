@@ -201,56 +201,60 @@ struct VoiceRecordingServiceTests {
     // MARK: - 自然语言解析
 
     @Test func parseDirectionSent() {
-        let result = service.parseNaturalLanguage("送张三一千元")
+        let result = service.parseSingleRecord("送张三一千元")
         #expect(result.direction == "sent")
     }
 
     @Test func parseDirectionReceived() {
-        let result = service.parseNaturalLanguage("收到李四五百元")
+        let result = service.parseSingleRecord("收到李四五百元")
         #expect(result.direction == "received")
     }
 
     @Test func parseContactName() {
-        // 使用姓名与事件关键词被数字分隔的输入
-        let result = service.parseNaturalLanguage("送张三1000元")
+        let result = service.parseSingleRecord("送张三1000元")
         #expect(result.contactName != nil)
     }
 
     @Test func parseAmountArabicDigits() {
-        let result = service.parseNaturalLanguage("张三结婚随礼1000元")
+        let result = service.parseSingleRecord("张三结婚随礼1000元")
         #expect(result.amount == 1000)
     }
 
     @Test func parseEventCategoryWedding() {
-        let result = service.parseNaturalLanguage("张三结婚随礼1000元")
-        #expect(result.eventCategory == "wedding")
+        let result = service.parseSingleRecord("张三结婚随礼1000元")
+        #expect(result.eventCategory == "婚礼")
     }
 
     @Test func parseEventCategoryBirthday() {
-        let result = service.parseNaturalLanguage("李四生日送500元")
-        #expect(result.eventCategory == "birthday")
+        let result = service.parseSingleRecord("李四生日送500元")
+        #expect(result.eventCategory == "生日")
     }
 
     @Test func parseEventCategoryFullMoon() {
-        let result = service.parseNaturalLanguage("王五满月酒随礼800元")
-        #expect(result.eventCategory == "full_moon")
+        let result = service.parseSingleRecord("王五满月酒随礼800元")
+        #expect(result.eventCategory == "满月酒")
     }
 
     @Test func parseFullSentence() {
-        let result = service.parseNaturalLanguage("张三结婚随礼1000元")
+        let result = service.parseSingleRecord("张三结婚随礼1000元")
         #expect(result.contactName != nil)
         #expect(result.direction == "sent") // "随" -> sent
         #expect(result.amount == 1000)
-        #expect(result.eventCategory == "wedding")
+        #expect(result.eventCategory == "婚礼")
         #expect(result.rawText == "张三结婚随礼1000元")
     }
 
     @Test func parseEmptyText() {
-        let result = service.parseNaturalLanguage("")
+        let result = service.parseSingleRecord("")
         #expect(result.contactName == nil)
         #expect(result.amount == nil)
         #expect(result.direction == nil)
         #expect(result.eventCategory == nil)
+    }
+
+    @Test func parseMultipleRecords() {
+        let results = service.parseMultipleRecords("张三结婚随礼1000元，李四生日送500元")
+        #expect(results.count >= 2)
     }
 }
 

@@ -25,7 +25,10 @@ struct EventListView: View {
     // 农历节日快速创建
     @State private var festivalPrefillTitle: String?
     @State private var festivalPrefillDate: Date?
-    @State private var festivalPrefillCategory: EventCategory?
+    @State private var festivalPrefillCategoryName: String?
+
+    @Query(filter: #Predicate<CategoryItem> { $0.isVisible == true }, sort: \CategoryItem.sortOrder)
+    private var categories: [CategoryItem]
     @State private var showingFestivalForm = false
 
     private let lunarService = LunarCalendarService.shared
@@ -99,7 +102,7 @@ struct EventListView: View {
             EventFormView(
                 prefillTitle: festivalPrefillTitle,
                 prefillDate: festivalPrefillDate,
-                prefillCategory: festivalPrefillCategory
+                prefillCategoryName: festivalPrefillCategoryName
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -238,7 +241,7 @@ struct EventListView: View {
                 HapticManager.shared.selection()
                 festivalPrefillDate = date
                 festivalPrefillTitle = nil
-                festivalPrefillCategory = nil
+                festivalPrefillCategoryName = nil
                 showingFestivalForm = true
             } label: {
                 Label("添加", systemImage: "plus")
@@ -286,7 +289,7 @@ struct EventListView: View {
                                 HapticManager.shared.selection()
                                 festivalPrefillTitle = festival.name
                                 festivalPrefillDate = calendarVM.selectedDate
-                                festivalPrefillCategory = festivalCategory(for: festival.name)
+                                festivalPrefillCategoryName = festivalCategoryName(for: festival.name)
                                 showingFestivalForm = true
                             } label: {
                                 Text("创建提醒")
@@ -467,25 +470,25 @@ struct EventListView: View {
                 // 类别筛选
                 Button {
                     HapticManager.shared.selection()
-                    viewModel.selectedCategory = nil
+                    viewModel.selectedCategoryName = nil
                 } label: {
                     LSJTag(
                         text: "所有类别",
                         color: Color.theme.info,
-                        isSelected: viewModel.selectedCategory == nil
+                        isSelected: viewModel.selectedCategoryName == nil
                     )
                 }
                 .buttonStyle(.plain)
 
-                ForEach(EventCategory.allCases.filter { $0 != .other }, id: \.self) { category in
+                ForEach(categories.filter { $0.name != "其他" }, id: \.name) { category in
                     Button {
                         HapticManager.shared.selection()
-                        viewModel.selectedCategory = category
+                        viewModel.selectedCategoryName = category.name
                     } label: {
                         LSJTag(
-                            text: category.displayName,
+                            text: category.name,
                             color: Color.theme.info,
-                            isSelected: viewModel.selectedCategory == category,
+                            isSelected: viewModel.selectedCategoryName == category.name,
                             icon: category.icon
                         )
                     }
@@ -578,7 +581,7 @@ struct EventListView: View {
                                 HapticManager.shared.selection()
                                 festivalPrefillTitle = festival.name
                                 festivalPrefillDate = festival.date
-                                festivalPrefillCategory = festivalCategory(for: festival.name)
+                                festivalPrefillCategoryName = festivalCategoryName(for: festival.name)
                                 showingFestivalForm = true
                             } label: {
                                 Image(systemName: "plus.circle.fill")
@@ -622,13 +625,13 @@ struct EventListView: View {
         return festivals
     }
 
-    /// 节日名称映射到事件类别
-    private func festivalCategory(for festivalName: String) -> EventCategory {
+    /// 节日名称映射到事件类别名称
+    private func festivalCategoryName(for festivalName: String) -> String {
         switch festivalName {
-        case "春节": return .springFestival
-        case "中秋节": return .midAutumn
-        case "端午节": return .dragonBoat
-        default: return .other
+        case "春节": return "春节"
+        case "中秋节": return "中秋"
+        case "端午节": return "端午"
+        default: return "其他"
         }
     }
 

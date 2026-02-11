@@ -348,12 +348,14 @@ struct ClearDataView: View {
                 try modelContext.delete(model: Contact.self)
                 try modelContext.delete(model: EventReminder.self)
                 try modelContext.delete(model: GiftEvent.self)
+                try modelContext.delete(model: CategoryItem.self)
                 try modelContext.save()
 
                 // 2. 取消所有本地通知
                 NotificationService.shared.cancelAll()
 
-                // 3. 重新初始化内置事件模板
+                // 3. 重新初始化内置分类和事件模板
+                SeedDataService.seedBuiltInCategories(context: modelContext)
                 SeedDataService.seedBuiltInEvents(context: modelContext)
 
                 HapticManager.shared.successNotification()

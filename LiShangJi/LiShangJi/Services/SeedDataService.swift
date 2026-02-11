@@ -8,8 +8,60 @@
 import Foundation
 import SwiftData
 
-/// 预设数据服务 - 负责初始化内置事件模板
+/// 预设数据服务 - 负责初始化内置事件模板和内置分类
 struct SeedDataService {
+
+    // MARK: - 内置分类数据源
+
+    /// 内置分类定义（名称、图标、排序）
+    static let builtInCategoryDefinitions: [(name: String, icon: String, order: Int)] = [
+        ("婚礼", "heart.fill", 0),
+        ("新生儿", "figure.and.child.holdinghands", 1),
+        ("满月酒", "moon.fill", 2),
+        ("周岁", "birthday.cake.fill", 3),
+        ("生日", "gift.fill", 4),
+        ("丧事", "leaf.fill", 5),
+        ("乔迁", "house.fill", 6),
+        ("升学", "graduationcap.fill", 7),
+        ("升职", "star.fill", 8),
+        ("春节", "fireworks", 9),
+        ("中秋", "moon.haze.fill", 10),
+        ("端午", "sailboat.fill", 11),
+        ("其他", "ellipsis.circle.fill", 12),
+    ]
+
+    // MARK: - 初始化内置分类
+
+    /// 初始化内置分类（基于 name 去重，支持 iCloud 多设备场景）
+    static func seedBuiltInCategories(context: ModelContext) {
+        do {
+            // 获取已有分类
+            let descriptor = FetchDescriptor<CategoryItem>()
+            let existingItems = try context.fetch(descriptor)
+            let existingNames = Set(existingItems.map { $0.name })
+
+            var inserted = false
+            for def in builtInCategoryDefinitions {
+                guard !existingNames.contains(def.name) else { continue }
+                let item = CategoryItem(
+                    name: def.name,
+                    icon: def.icon,
+                    isBuiltIn: true,
+                    sortOrder: def.order
+                )
+                context.insert(item)
+                inserted = true
+            }
+
+            if inserted {
+                try context.save()
+            }
+        } catch {
+            print("初始化内置分类失败: \(error)")
+        }
+    }
+
+    // MARK: - 初始化内置事件模板
 
     /// 初始化预设事件模板（仅首次启动时执行）
     static func seedBuiltInEvents(context: ModelContext) {
@@ -28,19 +80,19 @@ struct SeedDataService {
 
         // 内置事件模板
         let builtInEvents: [(name: String, category: String, icon: String, order: Int)] = [
-            ("婚礼", EventCategory.wedding.rawValue, EventCategory.wedding.icon, 0),
-            ("新生儿", EventCategory.babyBorn.rawValue, EventCategory.babyBorn.icon, 1),
-            ("满月酒", EventCategory.fullMoon.rawValue, EventCategory.fullMoon.icon, 2),
-            ("周岁", EventCategory.firstBirthday.rawValue, EventCategory.firstBirthday.icon, 3),
-            ("生日", EventCategory.birthday.rawValue, EventCategory.birthday.icon, 4),
-            ("丧事", EventCategory.funeral.rawValue, EventCategory.funeral.icon, 5),
-            ("乔迁", EventCategory.housewarming.rawValue, EventCategory.housewarming.icon, 6),
-            ("升学", EventCategory.graduation.rawValue, EventCategory.graduation.icon, 7),
-            ("升职", EventCategory.promotion.rawValue, EventCategory.promotion.icon, 8),
-            ("春节", EventCategory.springFestival.rawValue, EventCategory.springFestival.icon, 9),
-            ("中秋", EventCategory.midAutumn.rawValue, EventCategory.midAutumn.icon, 10),
-            ("端午", EventCategory.dragonBoat.rawValue, EventCategory.dragonBoat.icon, 11),
-            ("其他", EventCategory.other.rawValue, EventCategory.other.icon, 12),
+            ("婚礼", "婚礼", "heart.fill", 0),
+            ("新生儿", "新生儿", "figure.and.child.holdinghands", 1),
+            ("满月酒", "满月酒", "moon.fill", 2),
+            ("周岁", "周岁", "birthday.cake.fill", 3),
+            ("生日", "生日", "gift.fill", 4),
+            ("丧事", "丧事", "leaf.fill", 5),
+            ("乔迁", "乔迁", "house.fill", 6),
+            ("升学", "升学", "graduationcap.fill", 7),
+            ("升职", "升职", "star.fill", 8),
+            ("春节", "春节", "fireworks", 9),
+            ("中秋", "中秋", "moon.haze.fill", 10),
+            ("端午", "端午", "sailboat.fill", 11),
+            ("其他", "其他", "ellipsis.circle.fill", 12),
         ]
 
         for event in builtInEvents {
@@ -55,5 +107,46 @@ struct SeedDataService {
         }
 
         try? context.save()
+    }
+
+    // MARK: - iCloud 同步去重
+
+    /// 清理重复的分类（基于 name 去重，保留最早创建的）
+    static func deduplicateCategories(context: ModelContext) {
+        do {
+            let descriptor = FetchDescriptor<CategoryItem>(
+                sortBy: [SortDescriptor(\.createdAt)]
+            )
+            let allItems = try context.fetch(descriptor)
+
+            var seenNames: [String: CategoryItem] = [:]
+            var toDelete: [CategoryItem] = []
+
+            for item in allItems {
+                if let existing = seenNames[item.name] {
+                    // 保留最早的，删除后来的
+                    // 如果后来的有更新的 updatedAt，合并可见性
+                    if item.updatedAt > existing.updatedAt {
+                        existing.isVisible = item.isVisible
+                        existing.icon = item.icon
+                        existing.sortOrder = item.sortOrder
+                        existing.updatedAt = item.updatedAt
+                    }
+                    toDelete.append(item)
+                } else {
+                    seenNames[item.name] = item
+                }
+            }
+
+            for item in toDelete {
+                context.delete(item)
+            }
+
+            if !toDelete.isEmpty {
+                try context.save()
+            }
+        } catch {
+            print("分类去重失败: \(error)")
+        }
     }
 }

@@ -290,7 +290,7 @@ struct RecordViewModelAdditionalTests {
         vm.amount = "1000"
         vm.contactName = "李四"
         vm.direction = .sent
-        vm.selectedEventCategory = .birthday
+        vm.selectedCategoryName = "生日"
         vm.eventName = "" // 不手动指定事件名
 
         let result = vm.saveRecord(context: context)
@@ -310,7 +310,7 @@ struct RecordViewModelAdditionalTests {
         vm.contactName = "王五"
         vm.direction = .received
         vm.eventName = "二婚庆典"
-        vm.selectedEventCategory = .wedding
+        vm.selectedCategoryName = "婚礼"
 
         let result = vm.saveRecord(context: context)
         #expect(result == true)

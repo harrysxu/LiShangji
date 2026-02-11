@@ -17,6 +17,12 @@ struct HomeView: View {
     @State private var showingEventList = false
     @State private var showPurchaseView = false
 
+    // 语音录入相关状态
+    @StateObject private var voiceService = VoiceRecordingService.shared
+    @State private var isVoiceRecording = false
+    @State private var showPermissionAlert = false
+    @State private var voiceErrorMessage: String?
+
     var body: some View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.xl) {
@@ -64,6 +70,11 @@ struct HomeView: View {
         .overlay(alignment: .bottomTrailing) {
             fabButton
         }
+        .overlay {
+            if isVoiceRecording {
+                voiceRecordingOverlay
+            }
+        }
         .alert("出错了", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -71,6 +82,24 @@ struct HomeView: View {
             Button("确定") { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .alert("需要语音识别权限", isPresented: $showPermissionAlert) {
+            Button("前往设置") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("取消", role: .cancel) { }
+        } message: {
+            Text("请在设置中开启语音识别和麦克风权限，以使用语音记账功能")
+        }
+        .alert("语音识别错误", isPresented: Binding(
+            get: { voiceErrorMessage != nil },
+            set: { if !$0 { voiceErrorMessage = nil } }
+        )) {
+            Button("确定") { voiceErrorMessage = nil }
+        } message: {
+            Text(voiceErrorMessage ?? "")
         }
         .sheet(isPresented: $showPurchaseView) {
             PurchaseView()
@@ -102,18 +131,156 @@ struct HomeView: View {
             }
             .premiumBadge(isPremium: PremiumManager.shared.isPremium)
 
-            QuickEntryButton(
-                icon: "mic.fill",
-                title: "说一说",
-                color: Color.theme.warning
-            ) {
-                if PremiumManager.shared.isPremium {
-                    router.showingVoiceInput = true
+            voiceInputButton
+                .premiumBadge(isPremium: PremiumManager.shared.isPremium)
+        }
+    }
+
+    // MARK: - 语音输入按钮（按住说话）
+
+    private var voiceInputButton: some View {
+        VStack(spacing: AppConstants.Spacing.sm) {
+            Image(systemName: isVoiceRecording ? "waveform" : "mic.fill")
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 48, height: 48)
+                .background(isVoiceRecording ? Color.theme.sent : Color.theme.warning)
+                .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+                .symbolEffect(.variableColor, isActive: isVoiceRecording)
+                .scaleEffect(isVoiceRecording ? 1.1 : 1.0)
+                .animation(.easeInOut(duration: 0.3), value: isVoiceRecording)
+
+            Text(isVoiceRecording ? "松开结束" : "按住说话")
+                .font(.caption)
+                .foregroundStyle(Color.theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isVoiceRecording else { return }
+                    startVoiceRecording()
+                }
+                .onEnded { _ in
+                    stopVoiceRecording()
+                }
+        )
+    }
+
+    // MARK: - 录音覆盖层
+
+    private var voiceRecordingOverlay: some View {
+        ZStack {
+            // 半透明背景
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .transition(.opacity)
+
+            VStack(spacing: AppConstants.Spacing.xl) {
+                // 波纹动画
+                ZStack {
+                    Circle()
+                        .fill(Color.theme.primary.opacity(0.1))
+                        .frame(width: 160, height: 160)
+                        .scaleEffect(isVoiceRecording ? 1.3 : 1.0)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isVoiceRecording)
+
+                    Circle()
+                        .fill(Color.theme.primary.opacity(0.2))
+                        .frame(width: 110, height: 110)
+                        .scaleEffect(isVoiceRecording ? 1.15 : 1.0)
+                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isVoiceRecording)
+
+                    Circle()
+                        .fill(Color.theme.primary)
+                        .frame(width: 80, height: 80)
+
+                    Image(systemName: "waveform")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.variableColor, isActive: isVoiceRecording)
+                }
+
+                Text("正在聆听...")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.white)
+
+                // 实时识别文本预览
+                if !voiceService.recognizedText.isEmpty {
+                    Text(voiceService.recognizedText)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AppConstants.Spacing.xl)
+                        .lineLimit(3)
+                }
+
+                Text("松开结束录音")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.top, AppConstants.Spacing.md)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isVoiceRecording)
+    }
+
+    // MARK: - 语音录入方法
+
+    private func startVoiceRecording() {
+        // 检查会员
+        guard PremiumManager.shared.isPremium else {
+            showPurchaseView = true
+            return
+        }
+
+        let permissionStatus = voiceService.checkPermissionStatus()
+        switch permissionStatus {
+        case .authorized:
+            beginRecording()
+        case .notDetermined:
+            Task {
+                let granted = await voiceService.requestPermission()
+                if granted {
+                    beginRecording()
                 } else {
-                    showPurchaseView = true
+                    showPermissionAlert = true
                 }
             }
-            .premiumBadge(isPremium: PremiumManager.shared.isPremium)
+        case .denied:
+            showPermissionAlert = true
+        }
+    }
+
+    private func beginRecording() {
+        // 清空上次识别结果
+        voiceService.recognizedText = ""
+        do {
+            try voiceService.startRecording()
+            HapticManager.shared.mediumImpact()
+            withAnimation {
+                isVoiceRecording = true
+            }
+        } catch {
+            voiceErrorMessage = "无法启动录音: \(error.localizedDescription)"
+        }
+    }
+
+    private func stopVoiceRecording() {
+        guard isVoiceRecording else { return }
+
+        voiceService.stopRecording()
+        HapticManager.shared.lightImpact()
+        withAnimation {
+            isVoiceRecording = false
+        }
+
+        // 有识别文本时弹出结果确认 Sheet
+        if !voiceService.recognizedText.isEmpty {
+            // 短延迟确保录音状态已清理完毕
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                router.showingVoiceInput = true
+            }
         }
     }
 
@@ -140,7 +307,7 @@ struct HomeView: View {
                         VStack(spacing: 0) {
                             ForEach(viewModel.upcomingEvents) { event in
                                 HStack(spacing: AppConstants.Spacing.md) {
-                                    Image(systemName: event.category.icon)
+                                    Image(systemName: CategoryItem.iconForName(event.eventCategory))
                                         .font(.caption)
                                         .foregroundStyle(Color.theme.primary)
                                         .frame(width: 28, height: 28)

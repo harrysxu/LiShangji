@@ -12,6 +12,8 @@ import StoreKit
 struct PurchaseView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var premiumManager = PremiumManager.shared
+    @State private var showPrivacyPolicy = false
+    @State private var showUserAgreement = false
 
     var body: some View {
         NavigationStack {
@@ -77,7 +79,7 @@ struct PurchaseView: View {
             }
 
             VStack(spacing: AppConstants.Spacing.sm) {
-                Text("礼尚记 高级版")
+                Text("随手礼 高级版")
                     .font(.title2.bold())
                     .foregroundStyle(Color.theme.textPrimary)
 
@@ -211,27 +213,54 @@ struct PurchaseView: View {
     private var legalSection: some View {
         VStack(spacing: AppConstants.Spacing.sm) {
             if !premiumManager.isPremium {
-                Text("购买即表示您同意我们的")
-                    .font(.caption)
-                    .foregroundStyle(Color.theme.textSecondary)
-                +
-                Text("《用户协议》")
-                    .font(.caption)
-                    .foregroundStyle(Color.theme.primary)
-                +
-                Text("和")
-                    .font(.caption)
-                    .foregroundStyle(Color.theme.textSecondary)
-                +
-                Text("《隐私政策》")
+                // 功能性链接 — 满足 App Store Guideline 3.1.2
+                HStack(spacing: 0) {
+                    Text("购买即表示您同意")
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+
+                    Button("《用户协议》") {
+                        showUserAgreement = true
+                    }
                     .font(.caption)
                     .foregroundStyle(Color.theme.primary)
+
+                    Text("和")
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+
+                    Button("《隐私政策》") {
+                        showPrivacyPolicy = true
+                    }
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.primary)
+                }
 
                 Text("付款将通过您的 Apple ID 账户处理\n一次性买断，无订阅，无自动续费\n如需退款，请联系 Apple 支持")
                     .font(.caption2)
                     .foregroundStyle(Color.theme.textSecondary.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
+            }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationStack {
+                PrivacyPolicyView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { showPrivacyPolicy = false }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showUserAgreement) {
+            NavigationStack {
+                UserAgreementView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { showUserAgreement = false }
+                        }
+                    }
             }
         }
     }

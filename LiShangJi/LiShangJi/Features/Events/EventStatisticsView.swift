@@ -162,7 +162,7 @@ struct EventStatisticsView: View {
                         // 柱状图
                         Chart(viewModel.categoryStats) { stat in
                             BarMark(
-                                x: .value("类别", stat.category.displayName),
+                                x: .value("类别", stat.categoryName),
                                 y: .value("数量", stat.count)
                             )
                             .foregroundStyle(Color.theme.primary.gradient)
@@ -187,12 +187,12 @@ struct EventStatisticsView: View {
                         // 详细列表
                         ForEach(viewModel.categoryStats) { stat in
                             HStack(spacing: AppConstants.Spacing.md) {
-                                Image(systemName: stat.category.icon)
+                                Image(systemName: stat.categoryIcon)
                                     .font(.caption)
                                     .foregroundStyle(Color.theme.primary)
                                     .frame(width: 20)
 
-                                Text(stat.category.displayName)
+                                Text(stat.categoryName)
                                     .font(.subheadline)
                                     .foregroundStyle(Color.theme.textPrimary)
 
@@ -261,7 +261,7 @@ struct EventStatisticsView: View {
                     VStack(spacing: 0) {
                         ForEach(viewModel.upcomingEvents) { event in
                             HStack(spacing: AppConstants.Spacing.md) {
-                                Image(systemName: event.category.icon)
+                                Image(systemName: CategoryItem.iconForName(event.eventCategory))
                                     .font(.caption)
                                     .foregroundStyle(Color.theme.primary)
                                     .frame(width: 24, height: 24)

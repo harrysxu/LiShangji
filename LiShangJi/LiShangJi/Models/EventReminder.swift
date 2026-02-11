@@ -15,7 +15,7 @@ final class EventReminder {
     var id: UUID = UUID()
     var title: String = ""                          // 事件标题
     var note: String = ""                           // 备注
-    var eventCategory: String = "other"             // 事件类别 (复用 EventCategory)
+    var eventCategory: String = "其他"               // 事件类别（中文名）
     var eventDate: Date = Date()                    // 事件日期
     var reminderOption: String = "none"             // 提醒选项 (ReminderOption rawValue)
     var reminderDate: Date?                         // 计算后的提醒时间
@@ -28,7 +28,7 @@ final class EventReminder {
     @Relationship(deleteRule: .nullify, inverse: \Contact.eventReminders)
     var contacts: [Contact]? = []
 
-    init(title: String, eventCategory: String = "other", eventDate: Date = Date()) {
+    init(title: String, eventCategory: String = "其他", eventDate: Date = Date()) {
         self.id = UUID()
         self.title = title
         self.eventCategory = eventCategory
@@ -39,9 +39,9 @@ final class EventReminder {
 
     // MARK: - 计算属性
 
-    /// 事件类别枚举
-    var category: EventCategory {
-        EventCategory(rawValue: eventCategory) ?? .other
+    /// 事件类别显示名称（即 eventCategory 本身，现在直接存储中文名）
+    var categoryDisplayName: String {
+        eventCategory
     }
 
     /// 提醒选项枚举
