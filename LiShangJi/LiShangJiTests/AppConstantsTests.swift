@@ -14,7 +14,7 @@ import SwiftUI
 struct BrandConstantsTests {
 
     @Test func appName() {
-        #expect(AppConstants.Brand.appName == "随手礼")
+        #expect(AppConstants.Brand.appName == "礼小记")
     }
 
     @Test func slogan() {

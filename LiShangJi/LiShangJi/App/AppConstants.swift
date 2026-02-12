@@ -61,7 +61,7 @@ enum AppConstants {
     // MARK: - 品牌信息
 
     enum Brand {
-        static let appName = "随手礼"
+        static let appName = "礼小记"
         static let slogan = "懂礼数，更懂你"
         static let version = "1.0"
         static let developerEmail = "ailehuoquan@163.com"

@@ -207,7 +207,7 @@ struct SettingsView: View {
                 NavigationLink {
                     AboutView()
                 } label: {
-                    settingsRow(icon: "info.circle.fill", title: "关于随手礼", color: Color.theme.primary)
+                    settingsRow(icon: "info.circle.fill", title: "关于礼小记", color: Color.theme.primary)
                 }
                 .accessibilityIdentifier("settings_about")
             }
@@ -286,7 +286,7 @@ struct PrivacyPolicyView: View {
 
                 Group {
                     sectionTitle("概述")
-                    bodyText("随手礼（以下简称「本应用」）由独立开发者徐晓龙开发和运营。我们深知个人信息的重要性，并会尽全力保护您的隐私安全。本隐私政策适用于本应用的所有功能和服务。")
+                    bodyText("礼小记（以下简称「本应用」）由独立开发者徐晓龙开发和运营。我们深知个人信息的重要性，并会尽全力保护您的隐私安全。本隐私政策适用于本应用的所有功能和服务。")
 
                     sectionTitle("数据存储")
                     bodyText("本应用采用「本地优先」架构，您的所有人情往来记录、联系人信息等数据仅存储在您的设备和您个人的 iCloud 空间中。开发者无法访问、查看或处理您的任何数据。我们不设立任何服务器来收集或存储用户数据。")
@@ -381,7 +381,7 @@ struct UserAgreementView: View {
 
                 Group {
                     sectionTitle("概述")
-                    bodyText("欢迎使用随手礼（以下简称「本应用」）。本用户协议（以下简称「本协议」）是您与本应用开发者徐晓龙之间关于使用本应用的法律协议。使用本应用即表示您同意本协议的全部条款。如果您不同意，请停止使用本应用。")
+                    bodyText("欢迎使用礼小记（以下简称「本应用」）。本用户协议（以下简称「本协议」）是您与本应用开发者徐晓龙之间关于使用本应用的法律协议。使用本应用即表示您同意本协议的全部条款。如果您不同意，请停止使用本应用。")
 
                     sectionTitle("服务说明")
                     bodyText("""

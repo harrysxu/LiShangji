@@ -7,17 +7,17 @@
 		<string>remote-notification</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>随手礼</string>
+	<string>礼小记</string>
 	<key>NSCameraUsageDescription</key>
-	<string>随手礼需要使用相机拍摄礼单进行 OCR 识别</string>
+	<string>礼小记需要使用相机拍摄礼单进行 OCR 识别</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>随手礼需要访问相册以选择礼单图片进行识别</string>
+	<string>礼小记需要访问相册以选择礼单图片进行识别</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>随手礼需要使用麦克风进行语音记账</string>
+	<string>礼小记需要使用麦克风进行语音记账</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>随手礼需要语音识别功能将您的语音转换为记账记录</string>
+	<string>礼小记需要语音识别功能将您的语音转换为记账记录</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>使用 Face ID 解锁随手礼以保护您的人情记录</string>
+	<string>使用 Face ID 解锁礼小记以保护您的人情记录</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

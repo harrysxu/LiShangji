@@ -28,7 +28,7 @@ class ExportService {
             sortBy: [SortDescriptor(\.eventDate, order: .reverse)]
         )
         let records = try context.fetch(descriptor)
-        return try exportRecordsToCSV(records: records, fileName: "随手礼全部数据")
+        return try exportRecordsToCSV(records: records, fileName: "礼小记全部数据")
     }
 
     /// 导出记录为 CSV
@@ -78,7 +78,7 @@ class ExportService {
         }
 
         let tempDir = FileManager.default.temporaryDirectory
-        let fileURL = tempDir.appendingPathComponent("随手礼联系人_\(dateString()).csv")
+        let fileURL = tempDir.appendingPathComponent("礼小记联系人_\(dateString()).csv")
         try csv.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }
@@ -114,7 +114,7 @@ class ExportService {
             records = records.filter { $0.eventDate < endOfDay }
         }
 
-        return try exportRecordsToCSV(records: records, fileName: "随手礼记录数据")
+        return try exportRecordsToCSV(records: records, fileName: "礼小记记录数据")
     }
 
     // MARK: - 导出提醒事件为 CSV
@@ -163,7 +163,7 @@ class ExportService {
         }
 
         let tempDir = FileManager.default.temporaryDirectory
-        let fileURL = tempDir.appendingPathComponent("随手礼提醒事件_\(dateString()).csv")
+        let fileURL = tempDir.appendingPathComponent("礼小记提醒事件_\(dateString()).csv")
         try csv.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }
@@ -259,7 +259,7 @@ class ExportService {
         }
 
         let tempDir = FileManager.default.temporaryDirectory
-        let fileURL = tempDir.appendingPathComponent("随手礼统计数据_\(dateString()).csv")
+        let fileURL = tempDir.appendingPathComponent("礼小记统计数据_\(dateString()).csv")
         try csv.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }

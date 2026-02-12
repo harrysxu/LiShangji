@@ -55,7 +55,7 @@ class BiometricAuthService {
         do {
             return try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: "解锁随手礼查看您的人情记录"
+                localizedReason: "解锁礼小记查看您的人情记录"
             )
         } catch {
             return false

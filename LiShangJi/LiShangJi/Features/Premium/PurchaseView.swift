@@ -79,7 +79,7 @@ struct PurchaseView: View {
             }
 
             VStack(spacing: AppConstants.Spacing.sm) {
-                Text("随手礼 高级版")
+                Text("礼小记 高级版")
                     .font(.title2.bold())
                     .foregroundStyle(Color.theme.textPrimary)
 
