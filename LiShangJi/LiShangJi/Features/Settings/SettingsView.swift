@@ -26,6 +26,7 @@ struct SettingsView: View {
                     .font(.largeTitle.bold())
                     .foregroundStyle(Color.theme.textPrimary)
                 Spacer()
+                GlobalAddMenu()
             }
             .padding(.horizontal, AppConstants.Spacing.lg)
             .padding(.top, AppConstants.Spacing.sm)
@@ -93,50 +94,28 @@ struct SettingsView: View {
 
             // 数据管理
             Section {
-                if PremiumManager.shared.isPremium {
-                    NavigationLink {
-                        DataExportView()
-                    } label: {
-                        settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
-                    }
-                    .accessibilityIdentifier("settings_export")
-                } else {
-                    Button {
-                        showPurchaseView = true
-                    } label: {
-                        HStack {
-                            settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
-                            Spacer()
-                            Image(systemName: "crown.fill")
-                                .font(.caption)
-                                .foregroundStyle(Color.theme.primary)
-                        }
-                    }
+                NavigationLink {
+                    DataSafetyView()
+                } label: {
+                    settingsRow(icon: "externaldrive.fill", title: "备份、恢复与导入", color: .green)
                 }
 
-                if PremiumManager.shared.isPremium {
-                    NavigationLink {
-                        ICloudSyncView()
-                    } label: {
-                        HStack {
-                            settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
-                            Spacer()
-                            Text(iCloudSyncEnabled ? "已开启" : "已关闭")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.theme.textSecondary)
-                        }
-                    }
-                } else {
-                    Button {
-                        showPurchaseView = true
-                    } label: {
-                        HStack {
-                            settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
-                            Spacer()
-                            Image(systemName: "crown.fill")
-                                .font(.caption)
-                                .foregroundStyle(Color.theme.primary)
-                        }
+                NavigationLink {
+                    DataExportView()
+                } label: {
+                    settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
+                }
+                .accessibilityIdentifier("settings_export")
+
+                NavigationLink {
+                    ICloudSyncView()
+                } label: {
+                    HStack {
+                        settingsRow(icon: "icloud.fill", title: "iCloud 同步", color: .blue)
+                        Spacer()
+                        Text(iCloudSyncEnabled ? "已开启" : "已关闭")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.theme.textSecondary)
                     }
                 }
 
@@ -191,6 +170,13 @@ struct SettingsView: View {
                     settingsRow(icon: "star.fill", title: "给我们评分", color: .yellow)
                 }
                 .debounced()
+
+                NavigationLink {
+                    HelpAndReleaseNotesView()
+                } label: {
+                    settingsRow(icon: "questionmark.circle.fill", title: "帮助与更新说明", color: Color.theme.info)
+                }
+                .accessibilityIdentifier("settings_help_release_notes")
 
                 NavigationLink {
                     PrivacyPolicyView()
@@ -282,7 +268,7 @@ struct PrivacyPolicyView: View {
                     .font(.title2.bold())
                     .foregroundStyle(Color.theme.textPrimary)
 
-                bodyText("更新日期：2026 年 2 月 10 日\n生效日期：2026 年 2 月 10 日")
+                bodyText("更新日期：2026 年 7 月 12 日\n生效日期：2026 年 7 月 12 日")
 
                 Group {
                     sectionTitle("概述")
@@ -292,7 +278,7 @@ struct PrivacyPolicyView: View {
                     bodyText("本应用采用「本地优先」架构，您的所有人情往来记录、联系人信息等数据仅存储在您的设备和您个人的 iCloud 空间中。开发者无法访问、查看或处理您的任何数据。我们不设立任何服务器来收集或存储用户数据。")
 
                     sectionTitle("iCloud 同步")
-                    bodyText("如果您启用了 iCloud 同步功能，数据将通过 Apple CloudKit 在您的设备间自动同步。同步数据存储在您的 iCloud Private Database 中，仅您本人可以访问。同步功能完全由您自主选择开启或关闭。")
+                    bodyText("如果您启用了 iCloud 同步功能，数据将通过 Apple CloudKit 和 SwiftData 在后台处理设备间同步。同步数据存储在您的 iCloud Private Database 中，仅您本人可以访问。同步功能完全由您自主选择；切换配置需要重新启动应用，应用无法确认每一条数据已经上传或下载。")
                 }
 
                 Group {
@@ -308,9 +294,7 @@ struct PrivacyPolicyView: View {
 
                     • 麦克风：仅用于语音记账功能，录音数据仅在本地处理，不会上传或存储
 
-                    • 语音识别：使用 Apple Speech Framework 将语音转换为文字，优先使用设备端离线识别，识别完成后音频数据即被丢弃
-
-                    • 通讯录（如使用）：仅用于关联系统联系人信息，不会上传任何通讯录数据
+                    • 语音识别：使用 Apple Speech Framework 的设备端识别将语音转换为文字；设备不支持本地识别时该功能不可用，识别结束后音频数据即被丢弃
                     """)
 
                     sectionTitle("第三方服务")
@@ -319,7 +303,7 @@ struct PrivacyPolicyView: View {
 
                 Group {
                     sectionTitle("数据删除")
-                    bodyText("您可以随时在应用内通过「清空数据」功能删除所有数据。卸载应用将清除本地数据。如需清除 iCloud 中的同步数据，请前往系统设置 > Apple ID > iCloud > 管理储存空间中进行操作。")
+                    bodyText("您可以随时在应用内通过「清空数据」功能删除当前数据。操作前应用会创建本机恢复点；启用 iCloud 时，删除还可能同步到 iCloud 和其他设备。卸载应用会清除本地数据，但不应作为清除 iCloud 数据的唯一方式。重要操作前建议另存完整可恢复备份。")
 
                     sectionTitle("用户权利")
                     bodyText("""
@@ -328,7 +312,7 @@ struct PrivacyPolicyView: View {
                     • 查阅权：您可以随时在应用内查阅您的所有数据
                     • 更正权：您可以随时编辑和更正已记录的信息
                     • 删除权：您可以随时删除部分或全部数据
-                    • 导出权：高级版用户可将数据导出为 CSV 文件
+                    • 导出权：您可以免费导出 CSV 或完整可恢复备份
 
                     由于本应用采用本地存储架构，您的数据完全由您自行掌控。
                     """)
@@ -377,7 +361,7 @@ struct UserAgreementView: View {
                     .font(.title2.bold())
                     .foregroundStyle(Color.theme.textPrimary)
 
-                bodyText("更新日期：2026 年 2 月 10 日\n生效日期：2026 年 2 月 10 日")
+                bodyText("更新日期：2026 年 7 月 12 日\n生效日期：2026 年 7 月 12 日")
 
                 Group {
                     sectionTitle("概述")
@@ -404,8 +388,9 @@ struct UserAgreementView: View {
                     sectionTitle("免责声明")
                     bodyText("""
                     • 本应用按「现状」提供，开发者不对其适用性作任何明示或暗示的保证
-                    • 开发者不对因使用本应用产生的数据丢失承担责任，建议您定期通过导出功能备份数据
+                    • 开发者不对因使用本应用产生的数据丢失承担责任，建议您定期创建完整可恢复备份并验证备份可用
                     • iCloud 同步依赖 Apple 服务，同步延迟或异常可能由网络环境或 Apple 服务状态导致
+                    • OCR 与语音识别结果可能存在错误，保存前请核对姓名、金额、方向和场景
                     • 本应用的礼俗建议仅供参考，各地习俗可能存在差异，请以当地实际情况为准
                     • 因不可抗力（包括但不限于自然灾害、政策变更、系统故障等）导致的服务中断或数据损失，开发者不承担责任
                     """)

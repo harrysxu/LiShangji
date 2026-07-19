@@ -108,6 +108,7 @@ struct EventFormView: View {
                 placeholder: "输入事件标题，如「张三婚礼」",
                 isRequired: true
             )
+            .accessibilityIdentifier("event_title_field")
         }
     }
 

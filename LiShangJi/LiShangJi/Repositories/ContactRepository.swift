@@ -13,6 +13,7 @@ struct ContactRepository: ContactRepositoryProtocol {
 
     func fetchAll(context: ModelContext) throws -> [Contact] {
         let descriptor = FetchDescriptor<Contact>(
+            predicate: #Predicate { $0.mergedIntoContactID == nil },
             sortBy: [SortDescriptor(\.name)]
         )
         return try context.fetch(descriptor)
@@ -20,7 +21,7 @@ struct ContactRepository: ContactRepositoryProtocol {
 
     func fetchByRelation(_ relation: String, context: ModelContext) throws -> [Contact] {
         let predicate = #Predicate<Contact> { contact in
-            contact.relation == relation
+            contact.relation == relation && contact.mergedIntoContactID == nil
         }
         let descriptor = FetchDescriptor<Contact>(
             predicate: predicate,
@@ -33,14 +34,10 @@ struct ContactRepository: ContactRepositoryProtocol {
         guard !query.isEmpty else {
             return try fetchAll(context: context)
         }
-        let predicate = #Predicate<Contact> { contact in
-            contact.name.localizedStandardContains(query)
+        let normalized = Contact.normalize(query)
+        return try fetchAll(context: context).filter { contact in
+            contact.normalizedName.contains(normalized) || (contact.aliases ?? []).contains { $0.normalizedName.contains(normalized) }
         }
-        let descriptor = FetchDescriptor<Contact>(
-            predicate: predicate,
-            sortBy: [SortDescriptor(\.name)]
-        )
-        return try context.fetch(descriptor)
     }
 
     @discardableResult

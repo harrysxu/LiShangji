@@ -7,18 +7,21 @@
 
 import SwiftUI
 import SwiftData
+import StoreKit
 
 /// 手动录入 Sheet
 struct RecordEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.requestReview) private var requestReview
     @State private var viewModel = RecordViewModel()
     @State private var showDatePicker = false
     @State private var showToast = false
     @State private var showContactPicker = false
 
     var preselectedBook: GiftBook?
+    var returnSource: GiftRecord?
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
     @Query(sort: \Contact.name) private var allContacts: [Contact]
@@ -51,6 +54,15 @@ struct RecordEntryView: View {
             }
             .onAppear {
                 viewModel.selectedBook = preselectedBook ?? books.first
+                if let source = returnSource {
+                    viewModel.direction = .sent
+                    viewModel.amount = source.amount.formatted(.number.precision(.fractionLength(0...2)))
+                    viewModel.contactName = source.displayName
+                    viewModel.selectedContact = source.contact
+                    viewModel.selectedCategoryName = source.eventCategory
+                    viewModel.eventName = "回礼 · \(source.eventName)"
+                    viewModel.reciprocitySource = source
+                }
             }
             .toast(isPresented: $showToast, message: "记录保存成功")
             .alert("保存失败", isPresented: Binding(
@@ -155,7 +167,9 @@ struct RecordEntryView: View {
                 .font(.title.bold())
                 .foregroundStyle(Color.theme.textSecondary)
             Text(viewModel.amount.isEmpty ? "0" : viewModel.amount)
-                .font(.system(size: 42, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.largeTitle.bold().monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(Color.theme.textPrimary)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: viewModel.amount)
@@ -190,10 +204,35 @@ struct RecordEntryView: View {
             Divider().foregroundStyle(Color.theme.divider)
 
             // 备注
+            familySideField
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            // 备注
             noteField
         }
         .background(Color.theme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+    }
+
+    private var familySideField: some View {
+        HStack(spacing: AppConstants.Spacing.md) {
+            Image(systemName: "person.2")
+                .foregroundStyle(Color.theme.primary)
+                .frame(width: 24)
+            Text("家庭归属")
+                .font(.caption)
+                .foregroundStyle(Color.theme.textSecondary)
+            Spacer()
+            Picker("家庭归属", selection: $viewModel.familySideCode) {
+                Text("未指定").tag("unspecified")
+                Text("本人").tag("mine")
+                Text("伴侣").tag("partner")
+                Text("共同").tag("shared")
+            }
+            .labelsHidden()
+        }
+        .padding(AppConstants.Spacing.md)
     }
 
     // MARK: - 联系人字段
@@ -427,6 +466,7 @@ struct RecordEntryView: View {
     private func save() {
         if viewModel.saveRecord(context: modelContext) {
             showToast = true
+            if ReviewRequestPolicy.recordSuccessfulEntry() { requestReview() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 dismiss()
             }

@@ -22,7 +22,7 @@ struct BrandConstantsTests {
     }
 
     @Test func version() {
-        #expect(AppConstants.Brand.version == "1.0")
+        #expect(AppConstants.Brand.version == "1.2")
     }
 }
 

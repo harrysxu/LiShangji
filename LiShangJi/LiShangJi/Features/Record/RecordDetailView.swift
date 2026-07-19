@@ -54,6 +54,7 @@ struct RecordDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("记录更多操作")
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -61,17 +62,8 @@ struct RecordDetailView: View {
         }
         .confirmationDialog("确认删除", isPresented: $showingDeleteConfirmation) {
             Button("删除此记录", role: .destructive) {
-                // 删除前更新缓存
-                let amount = record.amount
-                let direction = record.direction
-                let contact = record.contact
-                let book = record.book
-                modelContext.delete(record)
-                contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
-                book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
-                try? modelContext.save()
-                HapticManager.shared.warningNotification()
-                dismiss()
+                do { try RecordCommandService().delete(record, context: modelContext); HapticManager.shared.warningNotification(); dismiss() }
+                catch { HapticManager.shared.errorNotification() }
             }
             Button("取消", role: .cancel) {}
         } message: {
@@ -81,10 +73,7 @@ struct RecordDetailView: View {
             ContactFormView(initialName: record.contactName) { newContact in
                 // 关联到当前记录
                 record.contact = newContact
-                record.updatedAt = Date()
-                // 更新联系人缓存
-                newContact.updateCacheForAddedRecord(amount: record.amount, direction: record.direction)
-                try? modelContext.save()
+                try? RecordCommandService().commitChanges(to: record, previousBook: record.book, context: modelContext)
                 // 重新加载往来历史
                 loadContactHistory()
             }
@@ -313,6 +302,7 @@ struct RecordEditView: View {
                         TextField("金额", text: $amount)
                             .font(.title2.bold().monospacedDigit())
                             .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("record_edit_amount_field")
                     }
                 }
 
@@ -408,8 +398,10 @@ struct RecordEditView: View {
             record.book?.recalculateCachedAggregates()
         }
 
-        try? modelContext.save()
-        HapticManager.shared.successNotification()
-        dismiss()
+        do {
+            try RecordCommandService().commitChanges(to: record, previousBook: oldBook, context: modelContext)
+            HapticManager.shared.successNotification()
+            dismiss()
+        } catch { HapticManager.shared.errorNotification() }
     }
 }

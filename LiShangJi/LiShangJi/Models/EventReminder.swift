@@ -24,6 +24,10 @@ final class EventReminder {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    // MARK: - V2 兼容扩展
+    var linkedRecordID: UUID?
+    var completionActionCode: String = "none"
+
     // MARK: - 关联联系人
     @Relationship(deleteRule: .nullify, inverse: \Contact.eventReminders)
     var contacts: [Contact]? = []

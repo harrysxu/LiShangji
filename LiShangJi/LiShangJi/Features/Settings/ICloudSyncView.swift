@@ -11,9 +11,12 @@ import SwiftData
 /// iCloud 同步状态页面
 struct ICloudSyncView: View {
     @AppStorage("iCloudSyncEnabled") private var iCloudSyncEnabled = false
+    @AppStorage("iCloudSyncRequiresRestart") private var requiresRestart = false
     @State private var syncService = ICloudSyncService.shared
     @State private var showDisableAlert = false
     @State private var showEnableAlert = false
+    @State private var statusMessage: String?
+    @State private var isApplyingChange = false
 
     @Environment(\.modelContext) private var modelContext
     @State private var recordsCount: Int = 0
@@ -61,34 +64,42 @@ struct ICloudSyncView: View {
                             value: syncService.isRefreshing
                         )
                 }
-                .disabled(syncService.isRefreshing)
+                .disabled(syncService.isRefreshing || requiresRestart)
             }
         }
         .alert("关闭 iCloud 同步", isPresented: $showDisableAlert) {
             Button("取消", role: .cancel) {
                 iCloudSyncEnabled = true
             }
-            Button("关闭并重启", role: .destructive) {
-                iCloudSyncEnabled = false
+            Button("创建备份并关闭", role: .destructive) {
+                applyConfigurationChange(enabled: false)
             }
         } message: {
-            Text("关闭后数据仅保存在本地设备，不再同步到 iCloud。需要重新启动应用以使更改生效。")
+            Text("关闭前会创建本地恢复点。配置将在下次启动 App 时生效；云端已有数据不会因此被删除。")
         }
         .alert("开启 iCloud 同步", isPresented: $showEnableAlert) {
             Button("取消", role: .cancel) {
                 iCloudSyncEnabled = false
             }
-            Button("开启并重启") {
-                iCloudSyncEnabled = true
+            Button("创建备份并开启") {
+                applyConfigurationChange(enabled: true)
             }
         } message: {
-            Text("开启后数据将自动同步到 iCloud，在您的所有设备间保持一致。需要重新启动应用以使更改生效。")
+            Text("开启前会创建本地恢复点。配置将在下次启动 App 时生效，SwiftData 随后在后台处理同步；此处无法确认每条数据的上传进度。")
+        }
+        .alert("iCloud 配置", isPresented: Binding(
+            get: { statusMessage != nil },
+            set: { if !$0 { statusMessage = nil } }
+        )) {
+            Button("确定") { statusMessage = nil }
+        } message: {
+            Text(statusMessage ?? "")
         }
         .onAppear {
             loadCounts()
-            Task {
+            if !requiresRestart { Task {
                 await syncService.refreshStatus()
-            }
+            } }
         }
     }
 
@@ -101,6 +112,19 @@ struct ICloudSyncView: View {
             eventsCount = try modelContext.fetchCount(FetchDescriptor<EventReminder>())
         } catch {
             // 静默失败，保持 0
+        }
+    }
+
+    private func applyConfigurationChange(enabled: Bool) {
+        isApplyingChange = true
+        defer { isApplyingChange = false }
+        do {
+            _ = try ICloudConfigurationChangeService.stageChange(to: enabled, context: modelContext)
+            statusMessage = enabled
+                ? "恢复点已创建。请重新打开 App 以启用 iCloud；首次同步可能需要一些时间。"
+                : "恢复点已创建。请重新打开 App 以停用 iCloud；云端已有数据不会被删除。"
+        } catch {
+            statusMessage = "无法创建恢复点，iCloud 配置未更改：\(error.localizedDescription)"
         }
     }
 
@@ -128,7 +152,7 @@ struct ICloudSyncView: View {
                         .foregroundStyle(Color.theme.textPrimary)
 
                     if let lastSync = syncService.lastSyncDate {
-                        Text("上次同步: \(lastSync.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Locale(identifier: "zh_CN"))))")
+                        Text("最近检测到远端变更: \(lastSync.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Locale(identifier: "zh_CN"))))")
                             .font(.caption)
                             .foregroundStyle(Color.theme.textSecondary)
                     }
@@ -159,8 +183,10 @@ struct ICloudSyncView: View {
         } header: {
             Text("同步数据概览")
         } footer: {
-            if iCloudSyncEnabled {
-                Text("以上数据已通过 iCloud 在您的设备间同步")
+            if requiresRestart {
+                Text("配置变更已保存，将在下次启动 App 时生效。当前页面不表示上传或下载已经完成。")
+            } else if iCloudSyncEnabled {
+                Text("iCloud 已开启。系统未提供逐条上传完成状态；最近远端变更时间仅作为同步活动依据。")
             } else {
                 Text("iCloud 同步已关闭，数据仅保存在本地")
             }
@@ -221,17 +247,25 @@ struct ICloudSyncView: View {
                         Text("iCloud 同步")
                             .font(.body)
                             .foregroundStyle(Color.theme.textPrimary)
-                        Text(iCloudSyncEnabled ? "数据自动同步到 iCloud" : "数据仅保存在本地")
+                        Text(syncPreferenceDescription)
                             .font(.caption)
                             .foregroundStyle(Color.theme.textSecondary)
                     }
                 }
             }
             .tint(Color.theme.primary)
+            .disabled(isApplyingChange)
         } footer: {
-            Text("切换同步状态需要重启应用才能生效")
+            Text(requiresRestart ? "配置待生效，请重新打开 App" : "切换前会自动创建恢复点，并在下次启动 App 时生效")
         }
         .listRowBackground(Color.theme.card)
+    }
+
+    private var syncPreferenceDescription: String {
+        if requiresRestart {
+            return iCloudSyncEnabled ? "将在下次启动时开启" : "将在下次启动时关闭"
+        }
+        return iCloudSyncEnabled ? "数据由 SwiftData 在后台同步" : "数据仅保存在本地"
     }
 
     // MARK: - 同步日志
@@ -301,6 +335,8 @@ struct ICloudSyncView: View {
             helpRow(icon: "questionmark.circle.fill", title: "同步未生效？", detail: "请确保已登录 iCloud 并开启了 iCloud Drive")
             helpRow(icon: "wifi.slash", title: "同步速度慢？", detail: "请检查网络连接，首次同步可能需要较长时间")
             helpRow(icon: "arrow.triangle.2.circlepath", title: "数据不一致？", detail: "请确保所有设备已更新到最新版本")
+            helpRow(icon: "power", title: "切换后没有变化？", detail: "同步配置会在下次启动 App 时生效；页面状态不能证明每条数据已经上传或下载")
+            helpRow(icon: "person.crop.circle.badge.xmark", title: "准备退出 iCloud？", detail: "请先创建完整备份。退出账号或关闭 iCloud Drive 后，同步将不可用")
             helpRow(icon: "lock.shield.fill", title: "数据安全", detail: "所有数据通过 Apple iCloud 加密传输，仅您本人可访问")
         } header: {
             Text("常见问题")

@@ -883,4 +883,16 @@ struct NavigationRouterAdditionalTests {
         router.showingVoiceInput = true
         #expect(router.showingVoiceInput == true)
     }
+
+    @Test func requestingVoiceCaptureReturnsToHome() {
+        let router = NavigationRouter()
+        router.selectedTab = .profile
+
+        router.selectedTab = .home
+        router.voiceCaptureRequested = true
+
+        #expect(router.selectedTab == .home)
+        #expect(router.voiceCaptureRequested == true)
+        #expect(router.showingVoiceInput == false)
+    }
 }

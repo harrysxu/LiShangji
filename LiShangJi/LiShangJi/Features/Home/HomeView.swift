@@ -12,14 +12,17 @@ import SwiftData
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(NavigationRouter.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = HomeViewModel()
     @State private var showingAllRecords = false
     @State private var showingEventList = false
+    @State private var showingStatistics = false
     @State private var showPurchaseView = false
 
     // 语音录入相关状态
     @StateObject private var voiceService = VoiceRecordingService.shared
-    @State private var isVoiceRecording = false
+    @State private var isVoiceStartPending = false
     @State private var showPermissionAlert = false
     @State private var voiceErrorMessage: String?
 
@@ -27,31 +30,33 @@ struct HomeView: View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.xl) {
                 // 页面标题
-                HStack(alignment: .bottom) {
+                HStack(alignment: .center) {
                     Text("首页")
                         .font(.largeTitle.bold())
                         .foregroundStyle(Color.theme.textPrimary)
                     Spacer()
+                    GlobalAddMenu()
                 }
                 .padding(.top, AppConstants.Spacing.sm)
-
-                // 收支概览卡片
-                DashboardCardView(
-                    totalReceived: viewModel.totalReceived,
-                    totalSent: viewModel.totalSent
-                )
-
-                // 快捷操作
-                quickActions
 
                 // 即将到来的事件
                 upcomingEventsSection
 
+                // 快捷操作
+                quickActions
+
                 // 最近记录
                 recentRecordsSection
+
+                HStack {
+                    Text("本月概览").font(.headline)
+                    Spacer()
+                    Button("查看分析") { showingStatistics = true }.font(.subheadline)
+                }
+                DashboardCardView(totalReceived: viewModel.totalReceived, totalSent: viewModel.totalSent)
             }
             .padding(.horizontal, AppConstants.Spacing.lg)
-            .padding(.bottom, AppConstants.Spacing.xxxl)
+            .padding(.bottom, AppConstants.Spacing.xxxl + 100)
         }
         .lsjPageBackground()
         .toolbar(.hidden, for: .navigationBar)
@@ -60,6 +65,7 @@ struct HomeView: View {
         }
         .onAppear {
             viewModel.loadData(context: modelContext)
+            handleVoiceCaptureRequest()
         }
         .navigationDestination(isPresented: $showingAllRecords) {
             AllRecordsListView()
@@ -67,12 +73,13 @@ struct HomeView: View {
         .navigationDestination(isPresented: $showingEventList) {
             EventListView()
         }
-        .overlay(alignment: .bottomTrailing) {
-            fabButton
+        .navigationDestination(isPresented: $showingStatistics) {
+            StatisticsView()
         }
         .overlay {
-            if isVoiceRecording {
+            if voiceService.isRecording {
                 voiceRecordingOverlay
+                    .transition(.opacity)
             }
         }
         .alert("出错了", isPresented: Binding(
@@ -104,12 +111,33 @@ struct HomeView: View {
         .sheet(isPresented: $showPurchaseView) {
             PurchaseView()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                cancelVoiceRecording()
+            }
+        }
+        .onChange(of: voiceService.lastError) { _, error in
+            if let error {
+                voiceErrorMessage = error
+            }
+        }
+        .onChange(of: router.voiceCaptureRequested) { _, requested in
+            if requested {
+                handleVoiceCaptureRequest()
+            }
+        }
+        .onDisappear {
+            cancelVoiceRecording()
+        }
     }
 
     // MARK: - 快捷操作区
 
     private var quickActions: some View {
-        HStack(spacing: AppConstants.Spacing.md) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: AppConstants.Spacing.sm))
+            : AnyLayout(HStackLayout(spacing: AppConstants.Spacing.md))
+        return layout {
             QuickEntryButton(
                 icon: "square.and.pencil",
                 title: "记一笔",
@@ -136,36 +164,48 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - 语音输入按钮（按住说话）
+    // MARK: - 语音输入按钮
 
     private var voiceInputButton: some View {
-        VStack(spacing: AppConstants.Spacing.sm) {
-            Image(systemName: isVoiceRecording ? "waveform" : "mic.fill")
-                .font(.title3)
-                .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
-                .background(isVoiceRecording ? Color.theme.sent : Color.theme.warning)
-                .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
-                .symbolEffect(.variableColor, isActive: isVoiceRecording)
-                .scaleEffect(isVoiceRecording ? 1.1 : 1.0)
-                .animation(.easeInOut(duration: 0.3), value: isVoiceRecording)
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(HStackLayout(spacing: AppConstants.Spacing.md))
+            : AnyLayout(VStackLayout(spacing: AppConstants.Spacing.sm))
+        return Button {
+            if voiceService.isRecording {
+                stopVoiceRecording()
+            } else {
+                startVoiceRecording()
+            }
+        } label: {
+            layout {
+                Image(systemName: voiceService.isRecording ? "waveform" : "mic.fill")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(voiceService.isRecording ? Color.theme.sent : Color.theme.warning)
+                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+                    .symbolEffect(.variableColor, isActive: voiceService.isRecording)
+                    .scaleEffect(voiceService.isRecording ? 1.1 : 1.0)
+                    .animation(.easeInOut(duration: 0.3), value: voiceService.isRecording)
 
-            Text(isVoiceRecording ? "松开结束" : "按住说话")
-                .font(.caption)
-                .foregroundStyle(Color.theme.textSecondary)
+                Text(voiceInputButtonTitle)
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppConstants.Spacing.md)
+            .background(Color.theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !isVoiceRecording else { return }
-                    startVoiceRecording()
-                }
-                .onEnded { _ in
-                    stopVoiceRecording()
-                }
-        )
+        .buttonStyle(.plain)
+        .disabled(isVoiceStartPending)
+        .accessibilityIdentifier("home_voice_input")
+    }
+
+    private var voiceInputButtonTitle: String {
+        if isVoiceStartPending { return "准备中..." }
+        return voiceService.isRecording ? "点击结束" : "点击开始"
     }
 
     // MARK: - 录音覆盖层
@@ -176,6 +216,7 @@ struct HomeView: View {
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .transition(.opacity)
+                .allowsHitTesting(false)
 
             VStack(spacing: AppConstants.Spacing.xl) {
                 // 波纹动画
@@ -183,14 +224,14 @@ struct HomeView: View {
                     Circle()
                         .fill(Color.theme.primary.opacity(0.1))
                         .frame(width: 160, height: 160)
-                        .scaleEffect(isVoiceRecording ? 1.3 : 1.0)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isVoiceRecording)
+                        .scaleEffect(voiceService.isRecording ? 1.3 : 1.0)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: voiceService.isRecording)
 
                     Circle()
                         .fill(Color.theme.primary.opacity(0.2))
                         .frame(width: 110, height: 110)
-                        .scaleEffect(isVoiceRecording ? 1.15 : 1.0)
-                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isVoiceRecording)
+                        .scaleEffect(voiceService.isRecording ? 1.15 : 1.0)
+                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: voiceService.isRecording)
 
                     Circle()
                         .fill(Color.theme.primary)
@@ -199,12 +240,14 @@ struct HomeView: View {
                     Image(systemName: "waveform")
                         .font(.system(size: 32))
                         .foregroundStyle(.white)
-                        .symbolEffect(.variableColor, isActive: isVoiceRecording)
+                        .symbolEffect(.variableColor, isActive: voiceService.isRecording)
                 }
+                .allowsHitTesting(false)
 
                 Text("正在聆听...")
                     .font(.title3.weight(.medium))
                     .foregroundStyle(.white)
+                    .allowsHitTesting(false)
 
                 // 实时识别文本预览
                 if !voiceService.recognizedText.isEmpty {
@@ -214,15 +257,31 @@ struct HomeView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, AppConstants.Spacing.xl)
                         .lineLimit(3)
+                        .allowsHitTesting(false)
                 }
 
-                Text("松开结束录音")
+                Text("点击下方按钮结束录音")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
                     .padding(.top, AppConstants.Spacing.md)
+                    .allowsHitTesting(false)
+
+                Button {
+                    stopVoiceRecording()
+                } label: {
+                    Label("结束录音", systemImage: "stop.fill")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, AppConstants.Spacing.xl)
+                        .padding(.vertical, AppConstants.Spacing.md)
+                        .background(Color.theme.sent)
+                        .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.sm))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("voice_stop_button")
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: isVoiceRecording)
+        .animation(.easeInOut(duration: 0.25), value: voiceService.isRecording)
     }
 
     // MARK: - 语音录入方法
@@ -233,14 +292,18 @@ struct HomeView: View {
             showPurchaseView = true
             return
         }
+        guard !voiceService.isRecording, !isVoiceStartPending else { return }
 
         let permissionStatus = voiceService.checkPermissionStatus()
         switch permissionStatus {
         case .authorized:
             beginRecording()
         case .notDetermined:
+            isVoiceStartPending = true
             Task {
                 let granted = await voiceService.requestPermission()
+                guard isVoiceStartPending else { return }
+                isVoiceStartPending = false
                 if granted {
                     beginRecording()
                 } else {
@@ -253,35 +316,45 @@ struct HomeView: View {
     }
 
     private func beginRecording() {
+        guard !voiceService.isRecording else { return }
+
         // 清空上次识别结果
         voiceService.recognizedText = ""
+        voiceService.lastError = nil
         do {
             try voiceService.startRecording()
             HapticManager.shared.mediumImpact()
-            withAnimation {
-                isVoiceRecording = true
-            }
         } catch {
+            isVoiceStartPending = false
             voiceErrorMessage = "无法启动录音: \(error.localizedDescription)"
         }
     }
 
     private func stopVoiceRecording() {
-        guard isVoiceRecording else { return }
+        guard voiceService.isRecording else { return }
 
         voiceService.stopRecording()
         HapticManager.shared.lightImpact()
-        withAnimation {
-            isVoiceRecording = false
-        }
 
-        // 有识别文本时弹出结果确认 Sheet
-        if !voiceService.recognizedText.isEmpty {
-            // 短延迟确保录音状态已清理完毕
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        // 给识别器一点时间提交最后一段转写，再决定是否进入确认页。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            if !voiceService.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 router.showingVoiceInput = true
+            } else if let error = voiceService.lastError {
+                voiceErrorMessage = error
             }
         }
+    }
+
+    private func cancelVoiceRecording() {
+        isVoiceStartPending = false
+        voiceService.stopRecording()
+    }
+
+    private func handleVoiceCaptureRequest() {
+        guard router.voiceCaptureRequested else { return }
+        router.voiceCaptureRequested = false
+        startVoiceRecording()
     }
 
     // MARK: - 即将到来的事件
@@ -291,7 +364,7 @@ struct HomeView: View {
             if !viewModel.upcomingEvents.isEmpty {
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
                     HStack {
-                        Text("即将到来的事件")
+                        Text("今天要处理")
                             .font(.headline)
                             .foregroundStyle(Color.theme.textPrimary)
                         Spacer()

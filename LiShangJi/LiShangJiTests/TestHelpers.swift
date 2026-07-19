@@ -16,6 +16,7 @@ func makeTestContainer() throws -> ModelContainer {
         GiftBook.self,
         GiftRecord.self,
         Contact.self,
+        ContactAlias.self,
         GiftEvent.self,
         EventReminder.self,
         CategoryItem.self,

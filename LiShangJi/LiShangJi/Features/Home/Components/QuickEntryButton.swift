@@ -15,6 +15,7 @@ struct QuickEntryButton: View {
     let action: () -> Void
 
     @State private var isDebouncing = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button(action: {
@@ -26,7 +27,10 @@ struct QuickEntryButton: View {
                 isDebouncing = false
             }
         }) {
-            VStack(spacing: AppConstants.Spacing.sm) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(HStackLayout(spacing: AppConstants.Spacing.md))
+                : AnyLayout(VStackLayout(spacing: AppConstants.Spacing.sm))
+            layout {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(color)
@@ -37,6 +41,7 @@ struct QuickEntryButton: View {
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(Color.theme.textPrimary)
+                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppConstants.Spacing.md)

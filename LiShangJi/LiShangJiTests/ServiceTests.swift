@@ -10,6 +10,58 @@ import Foundation
 import SwiftData
 @testable import LiShangJi
 
+// MARK: - PremiumManager Tests
+
+struct PremiumManagerTests {
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func validNonConsumableGrantsPremium() {
+        #expect(PremiumManager.grantsPremium(
+            productID: PremiumManager.premiumProductID,
+            revocationDate: nil,
+            expirationDate: nil,
+            now: now
+        ))
+    }
+
+    @Test func revokedTransactionDoesNotGrantPremium() {
+        #expect(!PremiumManager.grantsPremium(
+            productID: PremiumManager.premiumProductID,
+            revocationDate: now.addingTimeInterval(-60),
+            expirationDate: nil,
+            now: now
+        ))
+    }
+
+    @Test func expiredTransactionDoesNotGrantPremium() {
+        #expect(!PremiumManager.grantsPremium(
+            productID: PremiumManager.premiumProductID,
+            revocationDate: nil,
+            expirationDate: now.addingTimeInterval(-60),
+            now: now
+        ))
+    }
+
+    @Test func futureExpirationGrantsPremium() {
+        #expect(PremiumManager.grantsPremium(
+            productID: PremiumManager.premiumProductID,
+            revocationDate: nil,
+            expirationDate: now.addingTimeInterval(60),
+            now: now
+        ))
+    }
+
+    @Test func unrelatedProductDoesNotGrantPremium() {
+        #expect(!PremiumManager.grantsPremium(
+            productID: "com.xxl.LiShangJi.unrelated",
+            revocationDate: nil,
+            expirationDate: nil,
+            now: now
+        ))
+    }
+}
+
 // MARK: - LunarCalendarService Tests
 
 struct LunarCalendarServiceTests {
@@ -194,6 +246,7 @@ struct OCRServiceTests {
 
 // MARK: - VoiceRecordingService Tests
 
+@MainActor
 struct VoiceRecordingServiceTests {
 
     let service = VoiceRecordingService.shared

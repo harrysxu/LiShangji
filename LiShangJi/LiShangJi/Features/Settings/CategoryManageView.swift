@@ -19,6 +19,7 @@ struct CategoryManageView: View {
     @State private var editingCategory: CategoryItem?
     @State private var showDeleteConfirmation = false
     @State private var categoryToDelete: CategoryItem?
+    @State private var errorMessage: String?
 
     private var builtInCategories: [CategoryItem] {
         allCategories.filter { $0.isBuiltIn }
@@ -102,6 +103,9 @@ struct CategoryManageView: View {
                 Text("删除「\(category.name)」后，使用该分类的记录不会被删除，但分类显示可能受影响。")
             }
         }
+        .alert("操作没有完成", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("确定") { errorMessage = nil }
+        } message: { Text(errorMessage ?? "") }
     }
 
     // MARK: - 内置类型行
@@ -125,8 +129,8 @@ struct CategoryManageView: View {
                 get: { category.isVisible },
                 set: { newValue in
                     category.isVisible = newValue
-                    category.updatedAt = Date()
-                    try? modelContext.save()
+                    do { try CategoryCommandService().save(category, context: modelContext) }
+                    catch { errorMessage = error.localizedDescription }
                 }
             ))
             .tint(Color.theme.primary)
@@ -174,9 +178,8 @@ struct CategoryManageView: View {
             isBuiltIn: false,
             sortOrder: maxOrder + 1
         )
-        modelContext.insert(category)
-        try? modelContext.save()
-        HapticManager.shared.successNotification()
+        do { try CategoryCommandService().save(category, context: modelContext); HapticManager.shared.successNotification() }
+        catch { errorMessage = error.localizedDescription }
     }
 
     private func updateCategory(_ category: CategoryItem, name: String, icon: String) {
@@ -185,24 +188,18 @@ struct CategoryManageView: View {
 
         category.name = name
         category.icon = icon
-        category.updatedAt = Date()
-        try? modelContext.save()
-        HapticManager.shared.successNotification()
+        do { try CategoryCommandService().save(category, context: modelContext); HapticManager.shared.successNotification() }
+        catch { errorMessage = error.localizedDescription }
     }
 
     private func deleteCategory(_ category: CategoryItem) {
-        modelContext.delete(category)
-        try? modelContext.save()
-        categoryToDelete = nil
-        HapticManager.shared.successNotification()
+        do { try CategoryCommandService().delete([category], context: modelContext); categoryToDelete = nil; HapticManager.shared.successNotification() }
+        catch { errorMessage = error.localizedDescription }
     }
 
     private func deleteCustomCategories(at offsets: IndexSet) {
-        for index in offsets {
-            let category = customCategories[index]
-            modelContext.delete(category)
-        }
-        try? modelContext.save()
+        do { try CategoryCommandService().delete(offsets.map { customCategories[$0] }, context: modelContext) }
+        catch { errorMessage = error.localizedDescription }
     }
 
     private func moveCustomCategories(from source: IndexSet, to destination: Int) {
@@ -211,11 +208,8 @@ struct CategoryManageView: View {
 
         // 更新排序：自定义类型排在内置类型之后
         let builtInMaxOrder = builtInCategories.map(\.sortOrder).max() ?? 0
-        for (index, item) in items.enumerated() {
-            item.sortOrder = builtInMaxOrder + 1 + index
-            item.updatedAt = Date()
-        }
-        try? modelContext.save()
+        do { try CategoryCommandService().saveOrder(items, startingAt: builtInMaxOrder + 1, context: modelContext) }
+        catch { errorMessage = error.localizedDescription }
     }
 }
 

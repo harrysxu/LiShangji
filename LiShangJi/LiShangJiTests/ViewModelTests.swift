@@ -433,6 +433,7 @@ struct NavigationRouterTests {
         #expect(router.showingRecordEntry == false)
         #expect(router.showingOCRScanner == false)
         #expect(router.showingVoiceInput == false)
+        #expect(router.voiceCaptureRequested == false)
         #expect(router.selectedBookForEntry == nil)
     }
 
@@ -442,7 +443,7 @@ struct NavigationRouterTests {
         // 模拟导航操作
         router.homePath.append(UUID())
         router.booksPath.append(UUID())
-        router.statisticsPath.append(UUID())
+        router.interactionsPath.append(UUID())
         router.profilePath.append(UUID())
 
         #expect(router.homePath.count == 1)
@@ -452,7 +453,7 @@ struct NavigationRouterTests {
 
         #expect(router.homePath.count == 0)
         #expect(router.booksPath.count == 0)
-        #expect(router.statisticsPath.count == 0)
+        #expect(router.interactionsPath.count == 0)
         #expect(router.profilePath.count == 0)
     }
 
@@ -462,8 +463,8 @@ struct NavigationRouterTests {
         router.selectedTab = .books
         #expect(router.selectedTab == .books)
 
-        router.selectedTab = .statistics
-        #expect(router.selectedTab == .statistics)
+        router.selectedTab = .interactions
+        #expect(router.selectedTab == .interactions)
 
         router.selectedTab = .profile
         #expect(router.selectedTab == .profile)
@@ -484,20 +485,21 @@ struct AppTabTests {
     @Test func rawValues() {
         #expect(AppTab.home.rawValue == "首页")
         #expect(AppTab.books.rawValue == "账本")
-        #expect(AppTab.statistics.rawValue == "统计")
+        #expect(AppTab.interactions.rawValue == "往来")
         #expect(AppTab.profile.rawValue == "我的")
     }
 
     @Test func icons() {
         #expect(AppTab.home.icon == "house.fill")
         #expect(AppTab.books.icon == "book.closed.fill")
-        #expect(AppTab.statistics.icon == "chart.bar.fill")
-        #expect(AppTab.profile.icon == "person.fill")
+        #expect(AppTab.interactions.icon == "person.2.fill")
+        #expect(AppTab.profile.icon == "person.crop.circle.fill")
     }
 }
 
 // MARK: - StatisticsTimeFilter Tests
 
+@MainActor
 struct StatisticsTimeFilterTests {
 
     @Test func displayNameAllTime() {

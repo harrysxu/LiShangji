@@ -22,16 +22,16 @@ struct RecordNavigationID: Hashable {
 /// Tab 导航枚举
 enum AppTab: String, CaseIterable {
     case home = "首页"
+    case interactions = "往来"
     case books = "账本"
-    case statistics = "统计"
     case profile = "我的"
 
     var icon: String {
         switch self {
         case .home: return "house.fill"
+        case .interactions: return "person.2.fill"
         case .books: return "book.closed.fill"
-        case .statistics: return "chart.bar.fill"
-        case .profile: return "person.fill"
+        case .profile: return "person.crop.circle.fill"
         }
     }
 }
@@ -41,8 +41,8 @@ enum AppTab: String, CaseIterable {
 class NavigationRouter {
     var selectedTab: AppTab = .home
     var homePath = NavigationPath()
+    var interactionsPath = NavigationPath()
     var booksPath = NavigationPath()
-    var statisticsPath = NavigationPath()
     var profilePath = NavigationPath()
 
     /// 显示录入 Sheet
@@ -54,17 +54,21 @@ class NavigationRouter {
     /// 显示语音输入
     var showingVoiceInput = false
 
+    /// 从全局入口请求开始一次语音采集
+    var voiceCaptureRequested = false
+
     /// 显示新建事件 Sheet
     var showingEventEntry = false
 
     /// 当前选中的账本（用于从录入回到账本详情）
     var selectedBookForEntry: GiftBook?
+    var selectedRecordForReturn: GiftRecord?
 
     /// 重置导航
     func resetToRoot() {
         homePath = NavigationPath()
+        interactionsPath = NavigationPath()
         booksPath = NavigationPath()
-        statisticsPath = NavigationPath()
         profilePath = NavigationPath()
     }
 }

@@ -25,7 +25,7 @@ struct GiftBookListView: View {
     private var books: [GiftBook]
 
     private var canCreateBook: Bool {
-        PremiumManager.shared.isPremium || books.count < PremiumManager.FreeLimit.maxGiftBooks
+        PremiumManager.shared.entitlementPolicy.canCreateBook(existingActiveBookCount: books.count)
     }
 
     private let columns = [
@@ -42,6 +42,7 @@ struct GiftBookListView: View {
                         .font(.largeTitle.bold())
                         .foregroundStyle(Color.theme.textPrimary)
                     Spacer()
+                    GlobalAddMenu()
                 }
                 .padding(.top, AppConstants.Spacing.sm)
                 .padding(.horizontal, AppConstants.Spacing.lg)
@@ -166,24 +167,6 @@ struct GiftBookListView: View {
         }
         .alert("导出失败", isPresented: $showExportError) {
             Button("确定") {}
-        }
-        .overlay(alignment: .bottomTrailing) {
-            Button {
-                HapticManager.shared.mediumImpact()
-                router.selectedBookForEntry = nil
-                router.showingRecordEntry = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Color.theme.primary)
-                    .clipShape(Circle())
-                    .shadow(color: Color.theme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
-            }
-            .debounced()
-            .padding(.trailing, AppConstants.Spacing.xl)
-            .padding(.bottom, AppConstants.Spacing.xl)
         }
     }
 

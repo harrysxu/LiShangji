@@ -23,7 +23,7 @@ enum ICloudSyncStatus: Equatable {
     var displayName: String {
         switch self {
         case .syncing: return "同步中..."
-        case .synced: return "已同步"
+        case .synced: return "iCloud 已开启"
         case .error: return "同步异常"
         case .disabled: return "未启用"
         case .noAccount: return "未登录 iCloud"
@@ -186,7 +186,7 @@ class ICloudSyncService {
             guard let self else { return }
             self.lastSyncDate = Date()
             self.syncStatus = .synced
-            self.addEvent(.success, message: "收到远程数据变更，已同步")
+            self.addEvent(.success, message: "检测到远端数据变更")
         }
         notificationObservers.append(importObserver)
 
@@ -214,7 +214,7 @@ class ICloudSyncService {
                 case .available:
                     if self.syncStatus != .synced && self.syncStatus != .syncing {
                         self.syncStatus = .synced
-                        self.addEvent(.success, message: "iCloud 账户正常，同步已就绪")
+                        self.addEvent(.success, message: "iCloud 账户可用")
                     }
                 case .noAccount:
                     self.syncStatus = .noAccount
@@ -249,8 +249,7 @@ class ICloudSyncService {
             _ = try await container.userRecordID()
             await MainActor.run {
                 self.syncStatus = .synced
-                self.lastSyncDate = Date()
-                self.addEvent(.success, message: "iCloud 连接正常，同步功能可用")
+                self.addEvent(.success, message: "iCloud 连接可用；SwiftData 将在后台处理同步")
             }
         } catch {
             await MainActor.run {

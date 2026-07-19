@@ -38,6 +38,12 @@ struct PurchaseView: View {
                 .padding(.bottom, AppConstants.Spacing.xxxl)
             }
             .lsjPageBackground()
+            .navigationDestination(isPresented: $showUserAgreement) {
+                UserAgreementView()
+            }
+            .navigationDestination(isPresented: $showPrivacyPolicy) {
+                PrivacyPolicyView()
+            }
             .navigationTitle("升级高级版")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -59,6 +65,13 @@ struct PurchaseView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         dismiss()
                     }
+                }
+            }
+            .task {
+                if !premiumManager.isPremium,
+                   premiumManager.product == nil,
+                   premiumManager.productLoadErrorMessage == nil {
+                    await premiumManager.loadProduct()
                 }
             }
         }
@@ -103,15 +116,9 @@ struct PurchaseView: View {
             Divider().foregroundStyle(Color.theme.divider)
             featureRow(icon: "chart.bar.fill", title: "完整统计图表", subtitle: "收支趋势、关系分布、往来排行", color: Color.theme.received)
             Divider().foregroundStyle(Color.theme.divider)
-            featureRow(icon: "person.2.fill", title: "无限联系人", subtitle: "不再受 \(PremiumManager.FreeLimit.maxContacts) 人限制", color: .purple)
+            featureRow(icon: "arrow.uturn.forward.circle.fill", title: "回礼助手", subtitle: "按历史往来快速准备回礼", color: .purple)
             Divider().foregroundStyle(Color.theme.divider)
-            featureRow(icon: "bell.badge.fill", title: "无限事件提醒", subtitle: "不再受 \(PremiumManager.FreeLimit.maxEventReminders) 个限制", color: .orange)
-            Divider().foregroundStyle(Color.theme.divider)
-            featureRow(icon: "icloud.fill", title: "iCloud 多设备同步", subtitle: "iPad / iPhone 无缝切换", color: .blue)
-            Divider().foregroundStyle(Color.theme.divider)
-            featureRow(icon: "square.and.arrow.up", title: "数据导出", subtitle: "导出 CSV 文件，用 Excel 打开", color: .teal)
-            Divider().foregroundStyle(Color.theme.divider)
-            featureRow(icon: "moon.stars.fill", title: "农历日历", subtitle: "农历节日提醒，不错过每一个节点", color: Color.theme.sent)
+            featureRow(icon: "rectangle.stack.badge.plus", title: "批量整理", subtitle: "高效校对和管理多条记录", color: Color.theme.sent)
         }
         .background(Color.theme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
@@ -199,11 +206,34 @@ struct PurchaseView: View {
                     .shadow(color: Color.theme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
                 }
                 .disabled(premiumManager.isPurchasing)
-            } else {
+            } else if premiumManager.isLoadingProduct || premiumManager.productLoadErrorMessage == nil {
                 // 加载中
                 ProgressView("正在加载产品信息...")
                     .foregroundStyle(Color.theme.textSecondary)
                     .padding()
+            } else {
+                VStack(spacing: AppConstants.Spacing.md) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.title2)
+                        .foregroundStyle(Color.theme.warning)
+
+                    Text(premiumManager.productLoadErrorMessage ?? "暂时无法获取商品信息")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.theme.textSecondary)
+                        .multilineTextAlignment(.center)
+
+                    Button {
+                        Task { await premiumManager.loadProduct() }
+                    } label: {
+                        Label("重新加载", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.theme.primary)
+                }
+                .padding()
             }
         }
     }
@@ -241,26 +271,6 @@ struct PurchaseView: View {
                     .foregroundStyle(Color.theme.textSecondary.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
-            }
-        }
-        .sheet(isPresented: $showPrivacyPolicy) {
-            NavigationStack {
-                PrivacyPolicyView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showPrivacyPolicy = false }
-                        }
-                    }
-            }
-        }
-        .sheet(isPresented: $showUserAgreement) {
-            NavigationStack {
-                UserAgreementView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showUserAgreement = false }
-                        }
-                    }
             }
         }
     }

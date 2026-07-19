@@ -60,7 +60,25 @@ struct GiftBookRepository: GiftBookRepositoryProtocol {
     }
 
     func delete(_ book: GiftBook, context: ModelContext) throws {
-        context.delete(book)
-        try context.save()
+        let deletedRecords = book.records ?? []
+        let deletedIDs = Set(deletedRecords.map(\.id))
+        let contacts = Dictionary(uniqueKeysWithValues: deletedRecords.compactMap { record in
+            record.contact.map { ($0.id, $0) }
+        })
+        do {
+            for record in deletedRecords { context.delete(record) }
+            context.delete(book)
+            for contact in contacts.values {
+                let remaining = (contact.records ?? []).filter { !deletedIDs.contains($0.id) }
+                contact.cachedTotalReceived = remaining.filter { $0.direction == GiftDirection.received.rawValue }.reduce(0) { $0 + $1.amount }
+                contact.cachedTotalSent = remaining.filter { $0.direction == GiftDirection.sent.rawValue }.reduce(0) { $0 + $1.amount }
+                contact.cachedRecordCount = remaining.count
+                contact.refreshCompatibilityFields()
+            }
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 }

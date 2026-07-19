@@ -149,6 +149,7 @@ struct GiftBookDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("账本更多操作")
             }
         }
         .navigationDestination(for: RecordNavigationID.self) { navID in
@@ -179,6 +180,7 @@ struct GiftBookDetailView: View {
                     .clipShape(Circle())
                     .shadow(color: Color.theme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
             }
+            .accessibilityLabel("添加记录")
             .debounced()
             .padding(.trailing, AppConstants.Spacing.xl)
             .padding(.bottom, AppConstants.Spacing.xl)

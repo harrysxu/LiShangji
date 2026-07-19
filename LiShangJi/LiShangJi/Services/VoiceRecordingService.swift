@@ -109,6 +109,9 @@ class VoiceRecordingService: ObservableObject {
     private var audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var hasInstalledInputTap = false
+    private var isAudioSessionActive = false
+    private var recognitionSessionID: UUID?
     private let speechRecognizer: SFSpeechRecognizer?
     
     private init() {
@@ -119,14 +122,15 @@ class VoiceRecordingService: ObservableObject {
     /// 检查当前权限状态
     func checkPermissionStatus() -> VoicePermissionStatus {
         let speechStatus = SFSpeechRecognizer.authorizationStatus()
-        switch speechStatus {
-        case .authorized:
+        let microphoneStatus = AVAudioApplication.shared.recordPermission
+
+        if speechStatus == .authorized, microphoneStatus == .granted {
             return .authorized
-        case .notDetermined:
-            return .notDetermined
-        default:
-            return .denied
         }
+        if speechStatus == .notDetermined || microphoneStatus == .undetermined {
+            return .notDetermined
+        }
+        return .denied
     }
     
     /// 请求权限
@@ -157,97 +161,121 @@ class VoiceRecordingService: ObservableObject {
     
     /// 开始录音识别
     func startRecording() throws {
-        // 检查权限
-        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
+        guard checkPermissionStatus() == .authorized else {
             throw VoiceRecordingError.permissionDenied
         }
         
         guard let recognizer = speechRecognizer, recognizer.isAvailable else {
             throw VoiceRecordingError.recognizerUnavailable
         }
+        guard recognizer.supportsOnDeviceRecognition else {
+            throw VoiceRecordingError.onDeviceRecognitionUnavailable
+        }
         
         // 停止之前的任务
         stopRecording()
+        let sessionID = UUID()
+        recognitionSessionID = sessionID
         
-        // 配置音频会话
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        
-        // 创建识别请求
-        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else {
-            throw VoiceRecordingError.requestCreationFailed
-        }
-        
-        // 优先使用设备端识别（更快、更私密），不可用时回退到服务端识别
-        if recognizer.supportsOnDeviceRecognition {
+        do {
+            // 配置音频会话
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            isAudioSessionActive = true
+
+            // 创建识别请求
+            recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+            guard let recognitionRequest else {
+                throw VoiceRecordingError.requestCreationFailed
+            }
+
             recognitionRequest.requiresOnDeviceRecognition = true
-        }
-        
-        // 配置输入节点
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            recognitionRequest.append(buffer)
-        }
-        
-        // 启动音频引擎
-        audioEngine.prepare()
-        try audioEngine.start()
-        
-        // 开始识别任务
-        recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            guard let self = self else { return }
-            
-            DispatchQueue.main.async {
-                if let result = result {
-                    self.recognizedText = result.bestTranscription.formattedString
-                }
-                
-                if let error = error {
-                    // 过滤预期内的错误（用户主动停止录音时产生）
-                    let nsError = error as NSError
-                    let isExpectedError = nsError.domain == "kAFAssistantErrorDomain"
-                        && [216, 1110].contains(nsError.code)  // 216=取消, 1110=无语音
-                    let isKnownMessage = error.localizedDescription.contains("cancelled")
-                        || error.localizedDescription.contains("canceled")
-                        || error.localizedDescription.lowercased().contains("no speech")
-                        || error.localizedDescription.lowercased().contains("nospeech")
-                    
-                    if !isExpectedError && !isKnownMessage {
-                        self.lastError = "语音识别错误: \(error.localizedDescription)"
+
+            // 配置输入节点
+            let inputNode = audioEngine.inputNode
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+                recognitionRequest.append(buffer)
+            }
+            hasInstalledInputTap = true
+
+            // 启动音频引擎
+            audioEngine.prepare()
+            try audioEngine.start()
+
+            // 开始识别任务
+            recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+                guard let self else { return }
+
+                DispatchQueue.main.async {
+                    // 已开始新一轮识别时，忽略上一轮延迟到达的完成回调。
+                    guard self.recognitionSessionID == sessionID else { return }
+
+                    if let result {
+                        self.recognizedText = result.bestTranscription.formattedString
                     }
-                    self.stopRecording()
+
+                    if let error {
+                        // 过滤预期内的错误（用户主动停止录音时产生）
+                        let nsError = error as NSError
+                        let isExpectedError = nsError.domain == "kAFAssistantErrorDomain"
+                            && [216, 1110].contains(nsError.code)  // 216=取消, 1110=无语音
+                        let isKnownMessage = error.localizedDescription.contains("cancelled")
+                            || error.localizedDescription.contains("canceled")
+                            || error.localizedDescription.lowercased().contains("no speech")
+                            || error.localizedDescription.lowercased().contains("nospeech")
+
+                        if !isExpectedError && !isKnownMessage {
+                            self.lastError = "语音识别错误: \(error.localizedDescription)"
+                        }
+                        self.stopRecording()
+                    }
                 }
             }
+
+            isRecording = true
+        } catch {
+            stopRecording()
+            throw error
         }
-        
-        isRecording = true
     }
     
     /// 停止录音识别
     func stopRecording() {
-        // 防止重入（错误回调中也会调用 stopRecording）
-        guard isRecording || recognitionTask != nil else { return }
-        
-        // 1. 先停止音频输入
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        
-        // 2. 通知识别请求音频已结束（让识别器处理缓冲区中剩余音频）
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        
-        // 3. 使用 finish() 而非 cancel()，让识别任务优雅结束并返回最终结果
-        recognitionTask?.finish()
-        recognitionTask = nil
-        
-        // 4. 重置音频会话
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        
+        let hasActiveResources = isRecording
+            || audioEngine.isRunning
+            || hasInstalledInputTap
+            || isAudioSessionActive
+            || recognitionRequest != nil
+            || recognitionTask != nil
+        guard hasActiveResources else { return }
+
+        // 先更新公开状态，避免识别回调重入时再次清理同一批资源。
         isRecording = false
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if hasInstalledInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledInputTap = false
+        }
+
+        let request = recognitionRequest
+        recognitionRequest = nil
+        request?.endAudio()
+
+        // 使用 finish() 保留缓冲区中的最终识别结果。
+        let task = recognitionTask
+        recognitionTask = nil
+        task?.finish()
+
+        if isAudioSessionActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            isAudioSessionActive = false
+        }
     }
     
     // MARK: - 智能解析（优先AI，回退正则）
@@ -476,7 +504,7 @@ class VoiceRecordingService: ObservableObject {
                let nameMatch = nameRegex.firstMatch(in: remaining, range: NSRange(location: 0, length: (remaining as NSString).length)),
                let nameRange = Range(nameMatch.range(at: 1), in: remaining) {
                 let potentialName = String(remaining[nameRange])
-                if !nameExcludeWords.contains(potentialName) && !containsChineseNumber(potentialName) {
+                if !nameExcludeWords.contains(potentialName) && !isEntirelyChineseNumber(potentialName) {
                     splitPoints.append(afterAmount)
                 }
             }
@@ -626,7 +654,7 @@ class VoiceRecordingService: ObservableObject {
             for match in matches {
                 if let range = Range(match.range, in: text) {
                     let word = String(text[range])
-                    if !excludeWords.contains(word) && !containsChineseNumber(word) {
+                    if !excludeWords.contains(word) && !isEntirelyChineseNumber(word) {
                         return word
                     }
                 }
@@ -638,18 +666,18 @@ class VoiceRecordingService: ObservableObject {
     
     /// 从候选词中提取有效姓名（处理贪婪匹配导致的过长词）
     private func trimToName(_ candidate: String, excludeWords: Set<String>) -> String? {
-        // 如果候选词本身不含排除词且不含中文数字，直接返回
-        if !excludeWords.contains(candidate) && !containsChineseNumber(candidate) {
+        // 姓名可包含“一、三、四”等字，只排除完全由数字字符组成的金额词。
+        if !excludeWords.contains(candidate) && !isEntirelyChineseNumber(candidate) {
             // 但如果超过3个字，尝试进一步截短（常见中文姓名2-3字）
             if candidate.count > 3 {
                 // 尝试取后3个字
                 let suffix3 = String(candidate.suffix(3))
-                if !excludeWords.contains(suffix3) && !containsChineseNumber(suffix3) {
+                if !excludeWords.contains(suffix3) && !isEntirelyChineseNumber(suffix3) {
                     return suffix3
                 }
                 // 尝试取后2个字
                 let suffix2 = String(candidate.suffix(2))
-                if !excludeWords.contains(suffix2) && !containsChineseNumber(suffix2) {
+                if !excludeWords.contains(suffix2) && !isEntirelyChineseNumber(suffix2) {
                     return suffix2
                 }
             }
@@ -661,7 +689,7 @@ class VoiceRecordingService: ObservableObject {
         for length in [2, 3] {
             if candidate.count > length {
                 let prefix = String(candidate.prefix(length))
-                if !excludeWords.contains(prefix) && !containsChineseNumber(prefix) {
+                if !excludeWords.contains(prefix) && !isEntirelyChineseNumber(prefix) {
                     return prefix
                 }
             }
@@ -679,6 +707,10 @@ class VoiceRecordingService: ObservableObject {
             "拾", "佰", "仟", "萬"
         ]
         return text.contains(where: { chineseNumbers.contains($0) })
+    }
+
+    private func isEntirelyChineseNumber(_ text: String) -> Bool {
+        !text.isEmpty && text.allSatisfy { "零一二三四五六七八九十百千万两壹贰叁肆伍陆柒捌玖拾佰仟萬".contains($0) }
     }
     
     /// 解析金额（改进版：处理数字分隔符）
@@ -783,6 +815,7 @@ enum VoiceRecordingError: LocalizedError {
     case recognizerUnavailable
     case requestCreationFailed
     case audioEngineError
+    case onDeviceRecognitionUnavailable
     
     var errorDescription: String? {
         switch self {
@@ -794,6 +827,8 @@ enum VoiceRecordingError: LocalizedError {
             return "创建识别请求失败"
         case .audioEngineError:
             return "音频引擎错误"
+        case .onDeviceRecognitionUnavailable:
+            return "此设备暂不支持本地语音识别，请改用手动输入"
         }
     }
 }

@@ -127,7 +127,7 @@ struct GiftRecordModelTests {
         #expect(record.direction == "received")
         #expect(record.eventName == "张三婚礼")
         #expect(record.recordType == "gift")
-        #expect(record.eventCategory == "wedding")
+        #expect(record.eventCategory == "婚礼")
         #expect(record.note == "")
         #expect(record.source == "manual")
         #expect(record.isLoanSettled == false)
@@ -188,13 +188,13 @@ struct GiftEventModelTests {
         #expect(event.sortOrder == 0)
     }
 
-    @Test func eventCategory() {
+    @Test func categoryDisplayName() {
         let event = GiftEvent(name: "生日", category: "birthday", icon: "gift.fill")
-        #expect(event.eventCategory == .birthday)
+        #expect(event.categoryDisplayName == "birthday")
     }
 
-    @Test func eventCategoryInvalid() {
+    @Test func customCategoryDisplayName() {
         let event = GiftEvent(name: "自定义", category: "custom_value", icon: "star.fill")
-        #expect(event.eventCategory == .other)
+        #expect(event.categoryDisplayName == "custom_value")
     }
 }

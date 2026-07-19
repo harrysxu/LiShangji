@@ -324,10 +324,11 @@ class ExportService {
 
     /// CSV 转义
     private func escapeCSV(_ value: String) -> String {
-        if value.contains(",") || value.contains("\"") || value.contains("\n") {
-            return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+        let sanitized = value.first.map { "=+-@".contains($0) } == true ? "'\(value)" : value
+        if sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") {
+            return "\"\(sanitized.replacingOccurrences(of: "\"", with: "\"\""))\""
         }
-        return value
+        return sanitized
     }
 
     /// 日期字符串

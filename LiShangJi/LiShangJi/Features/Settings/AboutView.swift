@@ -54,7 +54,7 @@ struct AboutView: View {
                 // 特性列表
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.lg) {
                     featureRow(icon: "lock.shield.fill", title: "隐私至上", description: "数据仅存于你的设备和 iCloud")
-                    featureRow(icon: "icloud.fill", title: "多端同步", description: "iPhone 和 iPad 无缝切换")
+                    featureRow(icon: "icloud.fill", title: "可选 iCloud 同步", description: "开启后由系统在设备间同步")
                     featureRow(icon: "camera.viewfinder", title: "OCR 识别", description: "拍照即可识别纸质礼单")
                     featureRow(icon: "mic.fill", title: "语音记账", description: "说一声就记录")
                     featureRow(icon: "moon.stars.fill", title: "农历日历", description: "农历生日与节日提醒")
@@ -98,7 +98,7 @@ struct AboutView: View {
 
                 // 版本信息
                 VStack(spacing: 4) {
-                    Text("版本 \(AppConstants.Brand.version) (1)")
+                    Text("版本 \(AppConstants.Brand.version) (\(AppConstants.Brand.buildNumber))")
                         .font(.caption)
                         .foregroundStyle(Color.theme.textSecondary)
                     Text("Made with ❤️ in China")

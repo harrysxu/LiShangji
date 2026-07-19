@@ -22,6 +22,8 @@ class RecordViewModel {
     var selectedBook: GiftBook?
     var note: String = ""
     var recordType: RecordType = .gift
+    var familySideCode = "unspecified"
+    var reciprocitySource: GiftRecord?
 
     // 联系人搜索
     var contactSuggestions: [Contact] = []
@@ -30,7 +32,7 @@ class RecordViewModel {
     var errorMessage: String?
     var isSaved = false
 
-    private let recordRepository = GiftRecordRepository()
+    private let recordCommands = RecordCommandService()
     private let contactRepository = ContactRepository()
 
     /// 计算解析后的金额
@@ -80,35 +82,26 @@ class RecordViewModel {
         }
 
         do {
-            // 如果没有选择已有联系人，创建新联系人
-            var contact = selectedContact
-            if contact == nil {
-                contact = try contactRepository.create(
-                    name: trimmedName,
-                    relation: RelationType.other.rawValue,
-                    phone: "",
-                    context: context
-                )
-            }
-
             // 生成事件名称
             let finalEventName = eventName.isEmpty
                 ? "\(trimmedName)\(selectedCategoryName)"
                 : eventName
 
             // 创建记录
-            try recordRepository.create(
+            try recordCommands.create(RecordDraft(
                 amount: trimmedAmount,
-                direction: direction.rawValue,
+                direction: direction,
+                contactName: trimmedName,
                 eventName: finalEventName,
                 eventCategory: selectedCategoryName,
                 eventDate: eventDate,
                 note: note,
-                contactName: trimmedName,
+                recordType: recordType,
+                familySideCode: familySideCode,
+                contact: selectedContact,
                 book: selectedBook,
-                contact: contact,
-                context: context
-            )
+                reciprocitySource: reciprocitySource
+            ), context: context)
 
             isSaved = true
             HapticManager.shared.successNotification()

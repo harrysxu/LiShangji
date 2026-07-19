@@ -10,6 +10,8 @@ import SwiftData
 
 /// 事件提醒列表主视图
 struct EventListView: View {
+    var embeddedInInteractionHub = false
+
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \EventReminder.eventDate, order: .forward)
     private var allEvents: [EventReminder]
@@ -33,9 +35,7 @@ struct EventListView: View {
 
     private let lunarService = LunarCalendarService.shared
 
-    private var canAddEvent: Bool {
-        PremiumManager.shared.isPremium || allEvents.count < PremiumManager.FreeLimit.maxEventReminders
-    }
+    private var canAddEvent: Bool { true }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,7 +60,7 @@ struct EventListView: View {
             }
         }
         .lsjPageBackground()
-        .navigationTitle("事件与节日")
+        .navigationTitle(embeddedInInteractionHub ? "往来" : "事件与节日")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -83,6 +83,7 @@ struct EventListView: View {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(Color.theme.primary)
                     }
+                    .accessibilityLabel("添加提醒")
                     .debounced()
                 }
             }

@@ -21,6 +21,12 @@ final class Contact {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    // MARK: - V2 兼容扩展
+    var normalizedName: String = ""
+    var familySideCode: String = "unspecified"
+    var mergedIntoContactID: UUID?
+    var lastInteractionAt: Date?
+
     // MARK: - 农历生日
     var lunarBirthday: String = ""                  // 农历生日字符串，格式: "腊月-廿五"
     var solarBirthday: Date = Date()                // 公历生日
@@ -42,9 +48,13 @@ final class Contact {
     @Relationship(deleteRule: .nullify)
     var eventReminders: [EventReminder]? = []
 
+    @Relationship(deleteRule: .cascade, inverse: \ContactAlias.contact)
+    var aliases: [ContactAlias]? = []
+
     init(name: String, relation: String = "other") {
         self.id = UUID()
         self.name = name
+        self.normalizedName = Self.normalize(name)
         self.relation = relation
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -109,5 +119,19 @@ final class Contact {
             cachedTotalSent = max(0, cachedTotalSent - amount)
         }
         cachedRecordCount = max(0, cachedRecordCount - 1)
+    }
+
+
+    static func normalize(_ value: String) -> String {
+        value
+            .precomposedStringWithCompatibilityMapping
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .lowercased()
+    }
+
+    func refreshCompatibilityFields() {
+        normalizedName = Self.normalize(name)
+        lastInteractionAt = records?.map(\.eventDate).max()
     }
 }

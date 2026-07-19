@@ -18,15 +18,17 @@ final class PremiumManager {
 
     // MARK: - 产品 ID
 
-    static let premiumProductID = "com.xxl.LiShangJi.premium"
+    nonisolated static let premiumProductID = "com.xxl.LiShangJi.premium"
 
     // MARK: - 免费版限制
 
     enum FreeLimit {
         static let maxGiftBooks = 1
-        static let maxContacts = 20
-        static let maxEventReminders = 3
+        static let maxContacts = Int.max
+        static let maxEventReminders = Int.max
     }
+
+    var entitlementPolicy: EntitlementPolicy { EntitlementPolicy(isPremium: isPremium) }
 
     // MARK: - 状态
 
@@ -35,6 +37,12 @@ final class PremiumManager {
 
     /// StoreKit 产品（加载后缓存）
     private(set) var product: Product?
+
+    /// 是否正在加载 StoreKit 产品信息
+    private(set) var isLoadingProduct: Bool = false
+
+    /// 产品加载失败时用于页面内展示的可恢复错误
+    private(set) var productLoadErrorMessage: String?
 
     /// 是否正在购买中
     private(set) var isPurchasing: Bool = false
@@ -51,6 +59,15 @@ final class PremiumManager {
     private init() {
         // 从 UserDefaults 快速恢复（StoreKit 验证后会覆盖）
         isPremium = UserDefaults.standard.bool(forKey: "isPremiumUnlocked")
+
+        let launchArguments = ProcessInfo.processInfo.arguments
+        if launchArguments.contains("-ui-testing") {
+            isPremium = launchArguments.contains("-ui-testing-premium")
+            UserDefaults.standard.set(isPremium, forKey: "isPremiumUnlocked")
+            transactionListener = nil
+            Task { await loadProduct() }
+            return
+        }
 
         // 启动交易监听
         transactionListener = listenForTransactions()
@@ -71,11 +88,24 @@ final class PremiumManager {
     /// 加载产品信息
     @MainActor
     func loadProduct() async {
+        guard !isLoadingProduct else { return }
+
+        isLoadingProduct = true
+        productLoadErrorMessage = nil
+        defer { isLoadingProduct = false }
+
         do {
             let products = try await Product.products(for: [Self.premiumProductID])
-            product = products.first
+            guard let premiumProduct = products.first(where: { $0.id == Self.premiumProductID }) else {
+                product = nil
+                productLoadErrorMessage = "暂时无法获取商品信息，请检查网络后重试"
+                return
+            }
+
+            product = premiumProduct
         } catch {
-            errorMessage = "无法加载产品信息: \(error.localizedDescription)"
+            product = nil
+            productLoadErrorMessage = "无法加载商品信息：\(error.localizedDescription)"
         }
     }
 
@@ -98,7 +128,7 @@ final class PremiumManager {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
                 await transaction.finish()
-                await updatePremiumStatus(true)
+                updatePremiumStatus(true)
                 HapticManager.shared.successNotification()
 
             case .userCancelled:
@@ -138,10 +168,14 @@ final class PremiumManager {
             for await result in Transaction.updates {
                 do {
                     let transaction = try self.checkVerified(result)
-                    if transaction.productID == Self.premiumProductID {
-                        await self.updatePremiumStatus(true)
-                    }
+                    let shouldRefreshPremium = transaction.productID == Self.premiumProductID
                     await transaction.finish()
+
+                    // A transaction update can also represent a refund or revocation.
+                    // Re-read current entitlements instead of treating every verified update as a grant.
+                    if shouldRefreshPremium {
+                        await self.checkCurrentEntitlements()
+                    }
                 } catch {
                     // 验证失败，忽略
                 }
@@ -156,7 +190,11 @@ final class PremiumManager {
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
-                if transaction.productID == Self.premiumProductID {
+                if Self.grantsPremium(
+                    productID: transaction.productID,
+                    revocationDate: transaction.revocationDate,
+                    expirationDate: transaction.expirationDate
+                ) {
                     found = true
                     break
                 }
@@ -164,11 +202,24 @@ final class PremiumManager {
                 // 验证失败，忽略
             }
         }
-        await updatePremiumStatus(found)
+        updatePremiumStatus(found)
+    }
+
+    nonisolated static func grantsPremium(
+        productID: String,
+        revocationDate: Date?,
+        expirationDate: Date?,
+        now: Date = Date()
+    ) -> Bool {
+        guard productID == premiumProductID, revocationDate == nil else {
+            return false
+        }
+
+        return expirationDate.map { $0 > now } ?? true
     }
 
     /// 验证交易
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified(_, let error):
             throw error

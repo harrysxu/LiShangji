@@ -129,6 +129,11 @@ struct OCRScanView: View {
                 .foregroundStyle(Color.theme.textSecondary)
                 .multilineTextAlignment(.center)
 
+            Label("识别结果可能有误，保存前请逐条核对", systemImage: "checkmark.shield")
+                .font(.caption)
+                .foregroundStyle(Color.theme.warning)
+                .multilineTextAlignment(.center)
+
             VStack(spacing: AppConstants.Spacing.md) {
                 LSJButton(title: "拍照识别", style: .primary, icon: "camera.fill") {
                     showingCamera = true
@@ -445,34 +450,25 @@ struct OCRScanView: View {
         guard !isCreatingContacts else { return }
         isCreatingContacts = true
 
-        let contactRepository = ContactRepository()
-        var createdCount = 0
-
-        for index in recognizedItems.indices {
-            let item = recognizedItems[index]
-            let trimmedName = item.name.trimmingCharacters(in: .whitespaces)
-            guard item.isSelected, item.matchedContact == nil, !trimmedName.isEmpty else { continue }
-            do {
-                let newContact = try contactRepository.create(
-                    name: trimmedName,
-                    relation: RelationType.other.rawValue,
-                    phone: "",
-                    context: modelContext
-                )
-                recognizedItems[index].matchedContact = newContact
-                createdCount += 1
-            } catch {
-                continue
-            }
+        let indices = recognizedItems.indices.filter {
+            let item = recognizedItems[$0]
+            return item.isSelected && item.matchedContact == nil && !item.name.trimmingCharacters(in: .whitespaces).isEmpty
         }
-
-        if createdCount > 0 {
-            try? modelContext.save()
+        do {
+            let created = try ContactCommandService().create(
+                names: indices.map { recognizedItems[$0].name },
+                context: modelContext
+            )
+            for (index, contact) in zip(indices, created) { recognizedItems[index].matchedContact = contact }
+            if !created.isEmpty {
             HapticManager.shared.successNotification()
-            createToastMessage = "成功创建 \(createdCount) 个联系人"
+            createToastMessage = "成功创建 \(created.count) 个联系人"
             withAnimation {
                 showCreateToast = true
             }
+            }
+        } catch {
+            errorMessage = "联系人创建失败，现有数据未改变：\(error.localizedDescription)"
         }
 
         isCreatingContacts = false
@@ -481,34 +477,30 @@ struct OCRScanView: View {
     // MARK: - 批量保存
 
     private func saveAllRecords() {
-        let recordRepository = GiftRecordRepository()
-        let targetBook = selectedBook
-
-        // 只保存选中的条目
-        for item in recognizedItems where item.isSelected && item.amount > 0 && !item.name.isEmpty {
-            do {
-                // 创建记录：contactName 始终填充，contact 使用匹配到的联系人（可为 nil）
-                try recordRepository.create(
-                    amount: item.amount,
-                    direction: GiftDirection.received.rawValue,
-                    eventName: "\(item.name)的礼金",
-                    eventCategory: "其他",
-                    eventDate: Date(),
-                    note: "OCR 识别录入",
-                    contactName: item.name,
-                    book: targetBook,
-                    contact: item.matchedContact,
-                    context: modelContext
-                )
-            } catch {
-                // 继续处理下一条
-                continue
-            }
+        let imageData = selectedImage?.jpegData(compressionQuality: 0.75)
+        let drafts = recognizedItems.filter(\.isSelected).map { item in
+            RecordDraft(
+                amount: item.amount,
+                direction: .received,
+                contactName: item.name,
+                eventName: "\(item.name)的礼金",
+                eventCategory: "其他",
+                eventDate: Date(),
+                note: "OCR 识别录入",
+                sourceCode: "ocr",
+                contact: item.matchedContact,
+                book: selectedBook,
+                ocrImageData: imageData
+            )
         }
-
-        try? modelContext.save()
-        HapticManager.shared.successNotification()
-        dismiss()
+        do {
+            try RecordCommandService().createBatch(drafts, context: modelContext)
+            HapticManager.shared.successNotification()
+            dismiss()
+        } catch {
+            errorMessage = "批量保存没有完成，现有数据未改变：\(error.localizedDescription)"
+            HapticManager.shared.errorNotification()
+        }
     }
 }
 

@@ -9,9 +9,50 @@ import Foundation
 import UserNotifications
 
 /// 本地通知服务
-class NotificationService {
+/// 本地通知服务，同时负责前台展示与点击后的应用内路由事件。
+final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationService()
-    private init() {}
+    private var pendingEventID: UUID?
+
+    private override init() {
+        super.init()
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    // MARK: - 通知展示与响应
+
+    /// App 在前台时也显示横幅，避免用户只能在通知中心发现提醒。
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    /// 将点击事件交给 SwiftUI 根视图，按 userInfo 中的 eventID 打开详情。
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        if let eventIDString = userInfo["eventID"] as? String,
+           let eventID = UUID(uuidString: eventIDString) {
+            pendingEventID = eventID
+        }
+        NotificationCenter.default.post(
+            name: .lsjNotificationResponse,
+            object: nil,
+            userInfo: userInfo
+        )
+        completionHandler()
+    }
+
+    func consumePendingEventID() -> UUID? {
+        defer { pendingEventID = nil }
+        return pendingEventID
+    }
     
     // MARK: - 通知标识符前缀
     private let birthdayPrefix = "birthday_"
@@ -131,6 +172,13 @@ class NotificationService {
     /// 设置事件提醒
     /// - Parameter event: 事件提醒模型
     func scheduleEventReminder(event: EventReminder) {
+        Task { @MainActor in
+            guard await requestPermission() else { return }
+            scheduleAuthorizedEventReminder(event: event)
+        }
+    }
+
+    private func scheduleAuthorizedEventReminder(event: EventReminder) {
         let option = event.reminder
         guard option != .none else { return }
         
@@ -194,6 +242,46 @@ class NotificationService {
             scheduleEventReminder(event: event)
         }
     }
+
+    #if DEBUG
+    /// 真机 UI 测试使用时间间隔触发器压缩等待时间；生产包不会包含此入口。
+    @discardableResult
+    func scheduleDeliveryTest(
+        eventID: UUID,
+        eventTitle: String,
+        delay: TimeInterval
+    ) async -> Bool {
+        guard await requestPermission() else { return false }
+
+        let content = UNMutableNotificationContent()
+        content.title = "事件提醒"
+        content.body = eventTitle
+        content.sound = .default
+        content.badge = 1
+        content.userInfo = [
+            "type": "event",
+            "eventID": eventID.uuidString,
+            "eventTitle": eventTitle
+        ]
+
+        let request = UNNotificationRequest(
+            identifier: "notification_delivery_test_\(eventID.uuidString)",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(
+                timeInterval: max(delay, 1),
+                repeats: false
+            )
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            return true
+        } catch {
+            print("通知送达测试调度失败: \(error)")
+            return false
+        }
+    }
+    #endif
     
     // MARK: - 取消提醒
     
@@ -230,4 +318,8 @@ class NotificationService {
         formatter.locale = Locale(identifier: "zh_CN")
         return formatter.string(from: date)
     }
+}
+
+extension Notification.Name {
+    static let lsjNotificationResponse = Notification.Name("LiShangJi.NotificationResponse")
 }

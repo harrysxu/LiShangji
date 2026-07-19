@@ -108,6 +108,10 @@ struct VoiceInputView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+
+            Label("语音识别和解析结果可能有误，请核对后保存", systemImage: "checkmark.shield")
+                .font(.caption)
+                .foregroundStyle(Color.theme.warning)
         }
     }
 
@@ -348,26 +352,22 @@ struct VoiceInputView: View {
             }
         }
 
-        let recordRepository = GiftRecordRepository()
-
         do {
-            for result in editableResults {
-                let amount = Double(result.amountString) ?? 0
-                let eventName = "\(result.contactName)\(result.eventCategoryName)"
-
-                try recordRepository.create(
-                    amount: amount,
-                    direction: result.direction.rawValue,
-                    eventName: eventName,
+            let drafts = editableResults.map { result in
+                RecordDraft(
+                    amount: Double(result.amountString) ?? 0,
+                    direction: result.direction,
+                    contactName: result.contactName,
+                    eventName: "\(result.contactName)\(result.eventCategoryName)",
                     eventCategory: result.eventCategoryName,
                     eventDate: Date(),
                     note: "语音录入: \(voiceService.recognizedText)",
-                    contactName: result.contactName,
-                    book: books.first,
+                    sourceCode: "voice",
                     contact: result.matchedContact,
-                    context: modelContext
+                    book: books.first
                 )
             }
+            try RecordCommandService().createBatch(drafts, context: modelContext)
 
             showToast = true
             HapticManager.shared.successNotification()
@@ -375,7 +375,7 @@ struct VoiceInputView: View {
                 dismiss()
             }
         } catch {
-            errorMessage = "保存失败: \(error.localizedDescription)"
+            errorMessage = "批量保存没有完成，现有数据未改变：\(error.localizedDescription)"
             HapticManager.shared.errorNotification()
         }
     }
@@ -398,34 +398,24 @@ struct VoiceInputView: View {
         guard !isCreatingContacts else { return }
         isCreatingContacts = true
 
-        let contactRepository = ContactRepository()
-        var createdCount = 0
-
-        for index in editableResults.indices {
-            let result = editableResults[index]
-            let trimmedName = result.contactName.trimmingCharacters(in: .whitespaces)
-            guard result.matchedContact == nil, !trimmedName.isEmpty else { continue }
-            do {
-                let newContact = try contactRepository.create(
-                    name: trimmedName,
-                    relation: RelationType.other.rawValue,
-                    phone: "",
-                    context: modelContext
-                )
-                editableResults[index].matchedContact = newContact
-                createdCount += 1
-            } catch {
-                continue
-            }
+        let indices = editableResults.indices.filter {
+            editableResults[$0].matchedContact == nil && !editableResults[$0].contactName.trimmingCharacters(in: .whitespaces).isEmpty
         }
-
-        if createdCount > 0 {
-            try? modelContext.save()
+        do {
+            let created = try ContactCommandService().create(
+                names: indices.map { editableResults[$0].contactName },
+                context: modelContext
+            )
+            for (index, contact) in zip(indices, created) { editableResults[index].matchedContact = contact }
+            if !created.isEmpty {
             HapticManager.shared.successNotification()
-            createToastMessage = "成功创建 \(createdCount) 个联系人"
+            createToastMessage = "成功创建 \(created.count) 个联系人"
             withAnimation {
                 showCreateToast = true
             }
+            }
+        } catch {
+            errorMessage = "联系人创建失败，现有数据未改变：\(error.localizedDescription)"
         }
 
         isCreatingContacts = false

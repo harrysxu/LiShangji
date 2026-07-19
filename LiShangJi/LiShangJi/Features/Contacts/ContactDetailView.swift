@@ -6,14 +6,19 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// 联系人详情页 - 往来时间线 + 差额统计
 struct ContactDetailView: View {
     let contact: Contact
+    @Environment(\.modelContext) private var modelContext
+    @Environment(NavigationRouter.self) private var router
     @State private var showingEditSheet = false
+    @State private var showPurchase = false
+    @State private var showingMerge = false
 
     private var sortedRecords: [GiftRecord] {
-        (contact.records ?? []).sorted { $0.eventDate < $1.eventDate }
+        (contact.records ?? []).sorted { $0.eventDate > $1.eventDate }
     }
 
     var body: some View {
@@ -36,17 +41,20 @@ struct ContactDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingEditSheet = true
+                Menu {
+                    Button("编辑", systemImage: "pencil") { showingEditSheet = true }
+                    Button("合并联系人", systemImage: "person.2.badge.gearshape") { showingMerge = true }
                 } label: {
-                    Text("编辑")
-                        .foregroundStyle(Color.theme.primary)
+                    Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("联系人更多操作")
             }
         }
         .sheet(isPresented: $showingEditSheet) {
             ContactFormView(editingContact: contact)
         }
+        .sheet(isPresented: $showPurchase) { PurchaseView() }
+        .sheet(isPresented: $showingMerge) { MergeContactView(target: contact) }
     }
 
     // MARK: - 头部
@@ -81,6 +89,11 @@ struct ContactDetailView: View {
                 Text("农历生日: \(contact.lunarBirthday)")
                     .font(.caption)
                     .foregroundStyle(Color.theme.info)
+            }
+            if let aliases = contact.aliases, !aliases.isEmpty {
+                Text("曾用名：\(aliases.map(\.name).joined(separator: "、"))")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -164,12 +177,69 @@ struct ContactDetailView: View {
                                 Text(record.amount.currencyString)
                                     .font(.subheadline.bold().monospacedDigit())
                                     .foregroundStyle(record.isReceived ? Color.theme.received : Color.theme.sent)
+
+                                if record.isReceived && record.reciprocityStatusCode != "returned" {
+                                    Button {
+                                        guard PremiumManager.shared.entitlementPolicy.allows(.returnGiftAssistant) else { showPurchase = true; return }
+                                        if record.reciprocityStatusCode == "toReturn" {
+                                            router.selectedRecordForReturn = record
+                                            router.selectedBookForEntry = record.book
+                                            router.showingRecordEntry = true
+                                        } else {
+                                            try? RecordCommandService().setReciprocityStatus("toReturn", for: record, context: modelContext)
+                                        }
+                                    } label: {
+                                        Image(systemName: record.reciprocityStatusCode == "toReturn" ? "arrow.uturn.forward.circle.fill" : "arrow.uturn.forward.circle")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(record.reciprocityStatusCode == "toReturn" ? "按此记录回礼" : "加入待回礼")
+                                }
                             }
                             .padding(.vertical, AppConstants.Spacing.xs)
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private struct MergeContactView: View {
+    let target: Contact
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Query(filter: #Predicate<Contact> { $0.mergedIntoContactID == nil }, sort: \Contact.name) private var contacts: [Contact]
+    @State private var selected: Contact?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            List(contacts.filter { $0.id != target.id }) { contact in
+                Button {
+                    selected = contact
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(contact.name)
+                            Text("\(contact.recordCount) 条往来").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if selected?.id == contact.id { Image(systemName: "checkmark").foregroundStyle(Color.theme.primary) }
+                    }
+                }
+            }
+            .navigationTitle("合并到 \(target.name)")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("合并") {
+                        guard let selected else { return }
+                        do { try ContactCommandService().merge(selected, into: target, context: modelContext); dismiss() }
+                        catch { errorMessage = error.localizedDescription }
+                    }.disabled(selected == nil)
+                }
+            }
+            .alert("合并没有完成", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("确定") {} } message: { Text(errorMessage ?? "") }
         }
     }
 }

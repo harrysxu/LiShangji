@@ -1,11 +1,12 @@
 {
   "identifier" : "F6F3FC11-B27A-4E89-B1CE-E4A8B5C7D2E1",
-  "type" : "Configuration",
-  "version" : 3,
+  "nonRenewingSubscriptions" : [
+
+  ],
   "products" : [
     {
       "displayPrice" : "8",
-      "familyShareable" : true,
+      "familyShareable" : false,
       "internalID" : "1",
       "localizations" : [
         {
@@ -28,14 +29,62 @@
     "_applicationInternalID" : "1",
     "_developerTeamID" : "3LSP26D33P",
     "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : "2026-07-19T00:00:00Z",
     "_locale" : "zh_CN",
     "_storefront" : "CHN",
     "_storeKitErrors" : [
       {
         "current" : null,
         "enabled" : false,
-        "name" : "cycleCount"
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
       }
     ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
   }
 }

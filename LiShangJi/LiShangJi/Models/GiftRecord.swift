@@ -23,6 +23,17 @@ final class GiftRecord {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    // MARK: - V2 兼容扩展
+    // amount 在 1.x 期间仍是持久化真相，amountMinor 仅用于校验和展示。
+    var amountMinor: Int64?
+    var currencyCode: String = "CNY"
+    var categoryID: UUID?
+    var categoryNameSnapshot: String = ""
+    var contactNameSnapshot: String = ""
+    var familySideCode: String = "unspecified"
+    var reciprocityStatusCode: String = "none"
+    var linkedRecordID: UUID?
+
     // MARK: - OCR/语音来源标记
     var source: String = "manual"                  // "manual" / "ocr" / "voice"
     @Attribute(.externalStorage)
@@ -41,6 +52,7 @@ final class GiftRecord {
         self.amount = amount
         self.direction = direction
         self.eventName = eventName
+        self.amountMinor = Self.minorUnits(from: amount)
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -72,6 +84,9 @@ final class GiftRecord {
         if let name = contact?.name, !name.isEmpty {
             return name
         }
+        if !contactNameSnapshot.isEmpty {
+            return contactNameSnapshot
+        }
         return contactName.isEmpty ? "未知" : contactName
     }
 
@@ -82,5 +97,18 @@ final class GiftRecord {
         case "voice": return "语音输入"
         default: return "手动"
         }
+    }
+
+    static func minorUnits(from amount: Double) -> Int64 {
+        Int64((amount * 100).rounded())
+    }
+
+    func refreshCompatibilityFields() {
+        amountMinor = Self.minorUnits(from: amount)
+        if currencyCode.isEmpty { currencyCode = "CNY" }
+        if categoryNameSnapshot.isEmpty { categoryNameSnapshot = eventCategory }
+        let resolvedContactName = contactName.isEmpty ? (contact?.name ?? "") : contactName
+        if contactName.isEmpty { contactName = resolvedContactName }
+        if contactNameSnapshot.isEmpty { contactNameSnapshot = resolvedContactName }
     }
 }

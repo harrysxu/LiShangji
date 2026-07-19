@@ -10,15 +10,15 @@ import SwiftData
 
 /// 联系人列表页
 struct ContactListView: View {
+    var embeddedInInteractionHub = false
+
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ContactViewModel()
     @State private var showingAddContact = false
     @State private var showPurchaseView = false
-    @Query(sort: \Contact.name) private var contacts: [Contact]
+    @Query(filter: #Predicate<Contact> { $0.mergedIntoContactID == nil }, sort: \Contact.name) private var contacts: [Contact]
 
-    private var canAddContact: Bool {
-        PremiumManager.shared.isPremium || contacts.count < PremiumManager.FreeLimit.maxContacts
-    }
+    private var canAddContact: Bool { true }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,30 +53,6 @@ struct ContactListView: View {
                 }
                 Spacer()
             } else {
-                // 联系人数量限制提示
-                if !PremiumManager.shared.isPremium {
-                    HStack(spacing: AppConstants.Spacing.sm) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(Color.theme.warning)
-                            .font(.caption)
-                        Text("已使用 \(contacts.count)/\(PremiumManager.FreeLimit.maxContacts) 个联系人")
-                            .font(.caption)
-                            .foregroundStyle(Color.theme.textSecondary)
-                        Spacer()
-                        if !canAddContact {
-                            Button {
-                                showPurchaseView = true
-                            } label: {
-                                Text("升级")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color.theme.primary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, AppConstants.Spacing.lg)
-                    .padding(.vertical, AppConstants.Spacing.xs)
-                }
-
                 List {
                     ForEach(filteredContacts, id: \.id) { contact in
                         NavigationLink {
@@ -96,7 +72,8 @@ struct ContactListView: View {
             }
         }
         .lsjPageBackground()
-        .navigationTitle("联系人")
+        .navigationTitle(embeddedInInteractionHub ? "往来" : "联系人")
+        .navigationBarTitleDisplayMode(embeddedInInteractionHub ? .inline : .automatic)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -109,6 +86,7 @@ struct ContactListView: View {
                     Image(systemName: "person.badge.plus")
                         .foregroundStyle(Color.theme.primary)
                 }
+                .accessibilityLabel("添加联系人")
                 .debounced()
             }
         }
@@ -221,10 +199,13 @@ struct ContactListView: View {
 
     private func deleteContacts(at offsets: IndexSet) {
         let filtered = filteredContacts
-        for index in offsets {
-            modelContext.delete(filtered[index])
+        do {
+            for index in offsets {
+                try ContactCommandService().delete(filtered[index], context: modelContext)
+            }
+        } catch {
+            viewModel.errorMessage = "删除没有完成：\(error.localizedDescription)"
         }
-        try? modelContext.save()
     }
 }
 
@@ -239,6 +220,8 @@ struct ContactFormView: View {
     @State private var selectedRelation: RelationType = .friend
     @State private var hasBirthday = false
     @State private var solarBirthday = Date()
+    @State private var familySideCode = "unspecified"
+    @State private var errorMessage: String?
 
     var editingContact: Contact? = nil
     var initialName: String = ""
@@ -263,6 +246,15 @@ struct ContactFormView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                }
+
+                Section("家庭归属") {
+                    Picker("归属", selection: $familySideCode) {
+                        Text("未指定").tag("unspecified")
+                        Text("本人").tag("mine")
+                        Text("伴侣").tag("partner")
+                        Text("共同").tag("shared")
+                    }
                 }
 
                 Section("生日") {
@@ -296,10 +288,14 @@ struct ContactFormView: View {
                     selectedRelation = contact.relationType
                     hasBirthday = contact.hasBirthday
                     solarBirthday = contact.solarBirthday
+                    familySideCode = contact.familySideCode
                 } else if !initialName.isEmpty && name.isEmpty {
                     name = initialName
                 }
             }
+            .alert("保存没有完成", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+                Button("确定") { errorMessage = nil }
+            } message: { Text(errorMessage ?? "") }
         }
     }
 
@@ -314,8 +310,9 @@ struct ContactFormView: View {
             contact.relation = selectedRelation.rawValue
             contact.hasBirthday = hasBirthday
             contact.solarBirthday = solarBirthday
+            contact.familySideCode = familySideCode
             contact.updatedAt = Date()
-            try? modelContext.save()
+            do { try ContactCommandService().save(contact, context: modelContext) } catch { errorMessage = error.localizedDescription; return }
             onSave?(contact)
         } else {
             let contact = Contact(name: trimmedName, relation: selectedRelation.rawValue)
@@ -323,8 +320,8 @@ struct ContactFormView: View {
             contact.note = note
             contact.hasBirthday = hasBirthday
             contact.solarBirthday = solarBirthday
-            modelContext.insert(contact)
-            try? modelContext.save()
+            contact.familySideCode = familySideCode
+            do { try ContactCommandService().save(contact, context: modelContext) } catch { errorMessage = error.localizedDescription; return }
             onSave?(contact)
         }
 

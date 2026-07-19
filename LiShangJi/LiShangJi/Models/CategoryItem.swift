@@ -20,6 +20,7 @@ final class CategoryItem {
     var sortOrder: Int = 0
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    var code: String?
 
     init(name: String, icon: String, isBuiltIn: Bool = false, sortOrder: Int = 0) {
         self.id = UUID()

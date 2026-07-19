@@ -10,31 +10,47 @@ import Foundation
 extension Double {
     // MARK: - 缓存的 NumberFormatter（避免每次调用都重新创建，NumberFormatter 创建开销约 1-5ms）
 
-    private static let _currencyFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencySymbol = "¥"
-        return f
-    }()
+    private static let _wholeCurrencyFormatter = makeFormatter(style: .currency, fractionDigits: 0)
+    private static let _fractionalCurrencyFormatter = makeFormatter(style: .currency, fractionDigits: 2)
+    private static let _wholeDecimalFormatter = makeFormatter(style: .decimal, fractionDigits: 0)
+    private static let _fractionalDecimalFormatter = makeFormatter(style: .decimal, fractionDigits: nil)
 
-    private static let _decimalFormatter: NumberFormatter = {
+    private static func makeFormatter(
+        style: NumberFormatter.Style,
+        fractionDigits: Int?
+    ) -> NumberFormatter {
         let f = NumberFormatter()
-        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "zh_CN")
+        f.numberStyle = style
+
+        if style == .currency {
+            f.currencyCode = "CNY"
+            f.currencySymbol = "¥"
+        }
+
+        f.minimumFractionDigits = fractionDigits ?? 0
+        f.maximumFractionDigits = fractionDigits ?? 2
         return f
-    }()
+    }
 
     /// 格式化为人民币字符串，如 "¥1,000"
     var currencyString: String {
-        let formatter = Self._currencyFormatter
-        formatter.maximumFractionDigits = (self.truncatingRemainder(dividingBy: 1) == 0) ? 0 : 2
+        let formatter = isWholeNumber
+            ? Self._wholeCurrencyFormatter
+            : Self._fractionalCurrencyFormatter
         return formatter.string(from: NSNumber(value: self)) ?? "¥0"
     }
 
     /// 格式化为简洁金额字符串，如 "1,000"
     var amountString: String {
-        let formatter = Self._decimalFormatter
-        formatter.maximumFractionDigits = (self.truncatingRemainder(dividingBy: 1) == 0) ? 0 : 2
+        let formatter = isWholeNumber
+            ? Self._wholeDecimalFormatter
+            : Self._fractionalDecimalFormatter
         return formatter.string(from: NSNumber(value: self)) ?? "0"
+    }
+
+    private var isWholeNumber: Bool {
+        truncatingRemainder(dividingBy: 1) == 0
     }
 
     /// 格式化为带正负号的差额字符串

@@ -16,6 +16,7 @@ struct GiftBookFormView: View {
     @State private var selectedIcon = "book.closed.fill"
     @State private var selectedColor = "#C04851"
     @State private var showToast = false
+    @State private var errorMessage: String?
 
     var editingBook: GiftBook? = nil
 
@@ -146,6 +147,9 @@ struct GiftBookFormView: View {
                     selectedColor = book.colorHex
                 }
             }
+            .alert("保存没有完成", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+                Button("确定") { errorMessage = nil }
+            } message: { Text(errorMessage ?? "") }
         }
     }
 
@@ -158,11 +162,10 @@ struct GiftBookFormView: View {
             book.icon = selectedIcon
             book.colorHex = selectedColor
             book.updatedAt = Date()
-            try? modelContext.save()
+            do { try BookCommandService().save(book, context: modelContext) } catch { errorMessage = error.localizedDescription; return }
         } else {
             let book = GiftBook(name: trimmedName, icon: selectedIcon, colorHex: selectedColor)
-            modelContext.insert(book)
-            try? modelContext.save()
+            do { try BookCommandService().save(book, context: modelContext) } catch { errorMessage = error.localizedDescription; return }
         }
 
         HapticManager.shared.successNotification()

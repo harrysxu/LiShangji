@@ -67,9 +67,9 @@ struct ClearDataView: View {
             }
         } message: {
             if iCloudSyncEnabled {
-                Text("此操作不可撤销！清空后本地和 iCloud 中的所有数据将被永久删除，无法恢复。确定要继续吗？")
+                Text("本地数据会被清空，删除还可能同步到 iCloud 和其他设备。操作前会创建本机恢复点；仍建议先另存完整备份。确定继续吗？")
             } else {
-                Text("此操作不可撤销！清空后所有数据将被永久删除，无法恢复。确定要继续吗？")
+                Text("本地数据会被清空。操作前会创建本机恢复点；仍建议先另存完整备份。确定继续吗？")
             }
         }
     }
@@ -86,7 +86,7 @@ struct ClearDataView: View {
                 .font(.title2.bold())
                 .foregroundStyle(Color.theme.textPrimary)
 
-            Text("此操作将永久删除您的所有数据，且不可恢复。请仔细确认。")
+            Text("删除前会自动创建本机恢复点。请确认完整备份已妥善保存。")
                 .font(.subheadline)
                 .foregroundStyle(Color.theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -153,7 +153,7 @@ struct ClearDataView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.theme.textPrimary)
 
-                    Text("您已开启 iCloud 同步。清空数据后，iCloud 中的数据也将被删除，您在其他设备上的数据也会被同步清除，且不可恢复！")
+                    Text("您已开启 iCloud 同步。删除可能传播到 iCloud 和其他设备。若需恢复，请尽快使用本机恢复点或完整备份，并等待同步完成。")
                         .font(.caption)
                         .foregroundStyle(Color.theme.textSecondary)
                         .lineSpacing(3)
@@ -228,7 +228,7 @@ struct ClearDataView: View {
                 HStack(spacing: AppConstants.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
-                    Text("iCloud 数据将被同步删除，不可恢复")
+                    Text("删除可能同步到 iCloud 和其他设备")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.red)
                 }
@@ -313,7 +313,7 @@ struct ClearDataView: View {
                 .font(.title2.bold())
                 .foregroundStyle(Color.theme.textPrimary)
 
-            Text("所有数据已被永久删除")
+            Text("当前数据已清空，操作前的本机恢复点已保留")
                 .font(.subheadline)
                 .foregroundStyle(Color.theme.textSecondary)
 
@@ -342,21 +342,7 @@ struct ClearDataView: View {
         // 短暂延迟给用户视觉反馈
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             do {
-                // 1. 删除所有 SwiftData 模型数据
-                try modelContext.delete(model: GiftRecord.self)
-                try modelContext.delete(model: GiftBook.self)
-                try modelContext.delete(model: Contact.self)
-                try modelContext.delete(model: EventReminder.self)
-                try modelContext.delete(model: GiftEvent.self)
-                try modelContext.delete(model: CategoryItem.self)
-                try modelContext.save()
-
-                // 2. 取消所有本地通知
-                NotificationService.shared.cancelAll()
-
-                // 3. 重新初始化内置分类和事件模板
-                SeedDataService.seedBuiltInCategories(context: modelContext)
-                SeedDataService.seedBuiltInEvents(context: modelContext)
+                try ClearDataCommandService().execute(context: modelContext)
 
                 HapticManager.shared.successNotification()
 
