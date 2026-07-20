@@ -93,11 +93,21 @@ struct SettingsView: View {
 
             // 数据管理
             Section {
+                NavigationLink {
+                    DataImportView()
+                } label: {
+                    settingsRow(icon: "square.and.arrow.down", title: "导入数据", color: Color.theme.received)
+                }
+                .accessibilityIdentifier("settings_import")
+
                 if PremiumManager.shared.isPremium {
                     NavigationLink {
                         DataExportView()
                     } label: {
                         settingsRow(icon: "square.and.arrow.up", title: "导出数据", color: Color.theme.info)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("导出数据")
+                            .accessibilityIdentifier("settings_export")
                     }
                     .accessibilityIdentifier("settings_export")
                 } else {
@@ -111,8 +121,19 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(Color.theme.primary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("导出数据")
+                        .accessibilityIdentifier("settings_export")
                     }
+                    .accessibilityIdentifier("settings_export")
                 }
+
+                NavigationLink {
+                    BackupRestoreView()
+                } label: {
+                    settingsRow(icon: "archivebox.fill", title: "备份与恢复", color: Color.theme.primary)
+                }
+                .accessibilityIdentifier("settings_backup")
 
                 if PremiumManager.shared.isPremium {
                     NavigationLink {

@@ -342,6 +342,8 @@ struct ClearDataView: View {
         // 短暂延迟给用户视觉反馈
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             do {
+                _ = try BackupService.shared.createSnapshot(context: modelContext, reason: "清空数据前自动备份")
+
                 // 1. 删除所有 SwiftData 模型数据
                 try modelContext.delete(model: GiftRecord.self)
                 try modelContext.delete(model: GiftBook.self)

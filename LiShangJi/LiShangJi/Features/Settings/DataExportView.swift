@@ -45,6 +45,27 @@ enum ExportDataType: String, CaseIterable, Identifiable {
     }
 }
 
+enum ExportFileFormat: String, CaseIterable, Identifiable {
+    case csv
+    case pdf
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .csv: return "CSV"
+        case .pdf: return "PDF"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .csv: return "tablecells.fill"
+        case .pdf: return "doc.richtext.fill"
+        }
+    }
+}
+
 /// 导出数据页面
 struct DataExportView: View {
     @Environment(\.modelContext) private var modelContext
@@ -56,6 +77,7 @@ struct DataExportView: View {
     @State private var useTimeFilter = false
     @State private var startDate = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
     @State private var endDate = Date()
+    @State private var exportFormat: ExportFileFormat = .csv
 
     @State private var isExporting = false
     @State private var exportShareItem: ExportShareItem?
@@ -67,6 +89,8 @@ struct DataExportView: View {
         List {
             // 导出类型选择
             exportTypeSection
+
+            formatSection
 
             // 筛选条件（按类型显示不同选项）
             if exportType == .records {
@@ -101,6 +125,9 @@ struct DataExportView: View {
             updateDataCount()
         }
         .onChange(of: exportType) { _, _ in
+            if exportType != .records {
+                exportFormat = .csv
+            }
             updateDataCount()
         }
         .onChange(of: selectedBookIDs) { _, _ in
@@ -225,6 +252,27 @@ struct DataExportView: View {
         .listRowBackground(Color.theme.card)
     }
 
+    private var formatSection: some View {
+        Section {
+            Picker("文件格式", selection: $exportFormat) {
+                ForEach(ExportFileFormat.allCases) { format in
+                    Label(format.displayName, systemImage: format.icon).tag(format)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(exportType != .records)
+        } header: {
+            Text("导出格式")
+        } footer: {
+            if exportType == .records {
+                Text("CSV 适合二次编辑和导入；PDF 适合发送、打印和归档。")
+            } else {
+                Text("联系人、提醒事件和统计数据暂以 CSV 导出。")
+            }
+        }
+        .listRowBackground(Color.theme.card)
+    }
+
     // MARK: - 时间范围筛选
 
     private var timeFilterSection: some View {
@@ -324,7 +372,7 @@ struct DataExportView: View {
                             .tint(.white)
                     } else {
                         Image(systemName: "square.and.arrow.up")
-                        Text("导出 CSV 文件")
+                        Text("导出 \(exportFormat.displayName) 文件")
                             .fontWeight(.semibold)
                     }
                     Spacer()
@@ -340,7 +388,7 @@ struct DataExportView: View {
                     : Color.theme.primary
             )
         } footer: {
-            Text("导出格式为 CSV，可用 Excel、Numbers 等软件打开")
+            Text(exportFormat == .csv ? "CSV 可用 Excel、Numbers 等软件打开，也可作为后续导入模板。" : "PDF 适合对账、归档和分享给家人查看。")
         }
     }
 
@@ -403,12 +451,21 @@ struct DataExportView: View {
             switch exportType {
             case .records:
                 let effectiveBookIDs = selectAllBooks ? nil : selectedBookIDs
-                url = try ExportService.shared.exportFilteredRecordsToCSV(
-                    context: modelContext,
-                    bookIDs: effectiveBookIDs,
-                    startDate: effectiveStartDate,
-                    endDate: effectiveEndDate
-                )
+                if exportFormat == .pdf {
+                    url = try ExportService.shared.exportFilteredRecordsToPDF(
+                        context: modelContext,
+                        bookIDs: effectiveBookIDs,
+                        startDate: effectiveStartDate,
+                        endDate: effectiveEndDate
+                    )
+                } else {
+                    url = try ExportService.shared.exportFilteredRecordsToCSV(
+                        context: modelContext,
+                        bookIDs: effectiveBookIDs,
+                        startDate: effectiveStartDate,
+                        endDate: effectiveEndDate
+                    )
+                }
             case .contacts:
                 url = try ExportService.shared.exportContactsToCSV(context: modelContext)
             case .events:

@@ -22,6 +22,120 @@ class ExportService {
         return try exportRecordsToCSV(records: records, fileName: book.name)
     }
 
+    // MARK: - 导出 PDF
+
+    func exportBookToPDF(book: GiftBook) throws -> URL {
+        let records = (book.records ?? []).sorted { $0.eventDate > $1.eventDate }
+        return try exportRecordsToPDF(
+            title: "\(book.name) 礼簿",
+            subtitle: "共 \(records.count) 条记录",
+            records: records,
+            fileName: "\(book.name)_礼簿"
+        )
+    }
+
+    func exportFilteredRecordsToPDF(
+        context: ModelContext,
+        bookIDs: Set<UUID>?,
+        startDate: Date?,
+        endDate: Date?
+    ) throws -> URL {
+        let descriptor = FetchDescriptor<GiftRecord>(
+            sortBy: [SortDescriptor(\.eventDate, order: .reverse)]
+        )
+        var records = try context.fetch(descriptor)
+        if let bookIDs, !bookIDs.isEmpty {
+            records = records.filter { record in
+                guard let bookID = record.book?.id else { return false }
+                return bookIDs.contains(bookID)
+            }
+        }
+        if let startDate {
+            records = records.filter { $0.eventDate >= startDate }
+        }
+        if let endDate {
+            let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: endDate)) ?? endDate
+            records = records.filter { $0.eventDate < endOfDay }
+        }
+        return try exportRecordsToPDF(
+            title: "礼小记记录礼簿",
+            subtitle: "共 \(records.count) 条记录",
+            records: records,
+            fileName: "礼小记记录礼簿"
+        )
+    }
+
+    private func exportRecordsToPDF(title: String, subtitle: String, records: [GiftRecord], fileName: String) throws -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+        let sanitizedName = fileName.replacingOccurrences(of: "/", with: "_")
+        let url = tempDir.appendingPathComponent("\(sanitizedName)_\(dateString()).pdf")
+        let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842)
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        try renderer.writePDF(to: url) { context in
+            var page = 1
+            var y: CGFloat = 40
+            func beginPage() {
+                context.beginPage()
+                y = 40
+                drawText(title, x: 40, y: y, width: 515, font: .boldSystemFont(ofSize: 22))
+                y += 30
+                drawText("\(subtitle) · 导出时间 \(Date().chineseFullDate)", x: 40, y: y, width: 515, font: .systemFont(ofSize: 11), color: .darkGray)
+                y += 30
+                drawRow(["姓名", "方向", "类型", "金额", "事件", "日期"], y: y, isHeader: true)
+                y += 24
+            }
+
+            beginPage()
+            for record in records {
+                if y > 790 {
+                    drawText("第 \(page) 页", x: 500, y: 810, width: 55, font: .systemFont(ofSize: 9), color: .gray)
+                    page += 1
+                    beginPage()
+                }
+                drawRow([
+                    record.displayName,
+                    record.giftDirection.displayName,
+                    record.giftRecordType.displayName,
+                    record.giftStatsAmount > 0 ? record.giftStatsAmount.currencyString : record.amount.currencyString,
+                    record.eventName,
+                    record.eventDate.chineseMonthDay
+                ], y: y, isHeader: false)
+                y += 24
+            }
+            drawText("第 \(page) 页", x: 500, y: 810, width: 55, font: .systemFont(ofSize: 9), color: .gray)
+        }
+
+        return url
+    }
+
+    private func drawRow(_ columns: [String], y: CGFloat, isHeader: Bool) {
+        let widths: [CGFloat] = [75, 50, 50, 75, 170, 90]
+        var x: CGFloat = 40
+        for (index, value) in columns.enumerated() {
+            drawText(
+                value,
+                x: x,
+                y: y,
+                width: widths[index],
+                font: isHeader ? .boldSystemFont(ofSize: 10) : .systemFont(ofSize: 10),
+                color: isHeader ? .black : .darkGray
+            )
+            x += widths[index]
+        }
+    }
+
+    private func drawText(_ text: String, x: CGFloat, y: CGFloat, width: CGFloat, font: UIFont, color: UIColor = .black) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ]
+        NSString(string: text).draw(in: CGRect(x: x, y: y, width: width, height: 20), withAttributes: attributes)
+    }
+
     /// 导出全部记录为 CSV 文件
     func exportAllToCSV(context: ModelContext) throws -> URL {
         let descriptor = FetchDescriptor<GiftRecord>(
@@ -34,7 +148,7 @@ class ExportService {
     /// 导出记录为 CSV
     private func exportRecordsToCSV(records: [GiftRecord], fileName: String) throws -> URL {
         // BOM 标识 + CSV 表头
-        var csv = "\u{FEFF}序号,姓名,关系,金额,收/送,事件类型,事件名称,日期,备注,账本\n"
+        var csv = "\u{FEFF}序号,记录ID,联系人ID,账本ID,姓名,关系,金额,统计金额,收/送,记录类型,事件类型,事件名称,日期,来源,礼品/人情名称,估算金额,计入统计,借贷结清,借贷到期日,创建时间,更新时间,备注,账本\n"
 
         for (index, record) in records.enumerated() {
             let direction = record.isReceived ? "收到" : "送出"
@@ -45,9 +159,20 @@ class ExportService {
             let dateStr = record.eventDate.chineseFullDate
             let note = escapeCSV(record.note)
             let bookName = escapeCSV(record.book?.name ?? "")
+            let type = escapeCSV(record.giftRecordType.displayName)
+            let source = escapeCSV(record.sourceDisplayName)
+            let itemName = escapeCSV(record.itemName)
+            let loanDueDate = record.giftRecordType == .loan ? record.loanDueDate.chineseFullDate : ""
+            let contactID = record.contact?.id.uuidString ?? ""
+            let bookID = record.book?.id.uuidString ?? ""
 
-            csv += "\(index + 1),\(name),\(relation),\(record.amount),\(direction),"
-            csv += "\(eventCategory),\(eventName),\(dateStr),\(note),\(bookName)\n"
+            csv += "\(index + 1),\(record.id.uuidString),\(contactID),\(bookID),\(name),\(relation),"
+            csv += "\(record.amount),\(record.giftStatsAmount),\(direction),\(type),"
+            csv += "\(eventCategory),\(eventName),\(dateStr),\(source),\(itemName),"
+            csv += "\(record.estimatedAmount),\(record.includeInGiftStats ? "是" : "否"),"
+            csv += "\(record.isLoanSettled ? "是" : "否"),\(loanDueDate),"
+            csv += "\(record.createdAt.chineseFullDate),\(record.updatedAt.chineseFullDate),"
+            csv += "\(note),\(bookName)\n"
         }
 
         let tempDir = FileManager.default.temporaryDirectory
@@ -193,8 +318,8 @@ class ExportService {
         let receivedValue = GiftDirection.received.rawValue
         let sentValue = GiftDirection.sent.rawValue
 
-        let totalReceived = allRecords.filter { $0.direction == receivedValue }.reduce(0.0) { $0 + $1.amount }
-        let totalSent = allRecords.filter { $0.direction == sentValue }.reduce(0.0) { $0 + $1.amount }
+        let totalReceived = allRecords.filter { $0.direction == receivedValue }.reduce(0.0) { $0 + $1.giftStatsAmount }
+        let totalSent = allRecords.filter { $0.direction == sentValue }.reduce(0.0) { $0 + $1.giftStatsAmount }
 
         var csv = "\u{FEFF}"
 
@@ -221,8 +346,8 @@ class ExportService {
 
         for month in sortedMonths {
             guard let monthRecords = grouped[month] else { continue }
-            let received = monthRecords.filter { $0.direction == receivedValue }.reduce(0.0) { $0 + $1.amount }
-            let sent = monthRecords.filter { $0.direction == sentValue }.reduce(0.0) { $0 + $1.amount }
+            let received = monthRecords.filter { $0.direction == receivedValue }.reduce(0.0) { $0 + $1.giftStatsAmount }
+            let sent = monthRecords.filter { $0.direction == sentValue }.reduce(0.0) { $0 + $1.giftStatsAmount }
             csv += "\(month),\(received),\(sent),\(received - sent),\(monthRecords.count)\n"
         }
 
@@ -233,10 +358,10 @@ class ExportService {
         let relationGrouped = Dictionary(grouping: allRecords) { record -> String in
             record.contact?.relationType.displayName ?? "未分类"
         }
-        let sortedRelations = relationGrouped.sorted { $0.value.reduce(0.0) { $0 + $1.amount } > $1.value.reduce(0.0) { $0 + $1.amount } }
+        let sortedRelations = relationGrouped.sorted { $0.value.reduce(0.0) { $0 + $1.giftStatsAmount } > $1.value.reduce(0.0) { $0 + $1.giftStatsAmount } }
 
         for (relation, records) in sortedRelations {
-            let total = records.reduce(0.0) { $0 + $1.amount }
+            let total = records.reduce(0.0) { $0 + $1.giftStatsAmount }
             csv += "\(escapeCSV(relation)),\(total),\(records.count)\n"
         }
 
@@ -249,12 +374,12 @@ class ExportService {
         }
         let topContacts = contactGrouped
             .map { (name: $0.key, records: $0.value) }
-            .sorted { $0.records.reduce(0.0) { $0 + $1.amount } > $1.records.reduce(0.0) { $0 + $1.amount } }
+            .sorted { $0.records.reduce(0.0) { $0 + $1.giftStatsAmount } > $1.records.reduce(0.0) { $0 + $1.giftStatsAmount } }
             .prefix(20)
 
         for (index, item) in topContacts.enumerated() {
-            let received = item.records.filter { $0.direction == receivedValue }.reduce(0.0) { $0 + $1.amount }
-            let sent = item.records.filter { $0.direction == sentValue }.reduce(0.0) { $0 + $1.amount }
+            let received = item.records.filter { $0.direction == receivedValue }.reduce(0.0) { $0 + $1.giftStatsAmount }
+            let sent = item.records.filter { $0.direction == sentValue }.reduce(0.0) { $0 + $1.giftStatsAmount }
             csv += "\(index + 1),\(escapeCSV(item.name)),\(received),\(sent),\(received + sent),\(received - sent)\n"
         }
 

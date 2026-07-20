@@ -83,11 +83,11 @@ class StatisticsViewModel {
 
             totalReceived = filteredRecords
                 .filter { $0.direction == receivedValue }
-                .reduce(0) { $0 + $1.amount }
+                .reduce(0) { $0 + $1.giftStatsAmount }
 
             totalSent = filteredRecords
                 .filter { $0.direction == sentValue }
-                .reduce(0) { $0 + $1.amount }
+                .reduce(0) { $0 + $1.giftStatsAmount }
 
             loadMonthlyTrends(records: filteredRecords)
             loadRelationStats(records: filteredRecords)
@@ -151,10 +151,10 @@ class StatisticsViewModel {
 
                 let received = monthRecords
                     .filter { $0.direction == receivedValue }
-                    .reduce(0.0) { $0 + $1.amount }
+                    .reduce(0.0) { $0 + $1.giftStatsAmount }
                 let sent = monthRecords
                     .filter { $0.direction == sentValue }
-                    .reduce(0.0) { $0 + $1.amount }
+                    .reduce(0.0) { $0 + $1.giftStatsAmount }
 
                 if received > 0 || sent > 0 || i < 6 {
                     trends.append(MonthlyTrend(month: monthStr, monthDate: monthDate, amount: received, direction: "收到"))
@@ -175,10 +175,10 @@ class StatisticsViewModel {
 
                 let received = monthRecords
                     .filter { $0.direction == receivedValue }
-                    .reduce(0.0) { $0 + $1.amount }
+                    .reduce(0.0) { $0 + $1.giftStatsAmount }
                 let sent = monthRecords
                     .filter { $0.direction == sentValue }
-                    .reduce(0.0) { $0 + $1.amount }
+                    .reduce(0.0) { $0 + $1.giftStatsAmount }
 
                 if received > 0 || sent > 0 {
                     trends.append(MonthlyTrend(month: monthStr, monthDate: monthDate, amount: received, direction: "收到"))
@@ -204,7 +204,7 @@ class StatisticsViewModel {
         relationStats = grouped.enumerated().map { index, item in
             RelationGroupStat(
                 relation: item.key,
-                totalAmount: item.value.reduce(0) { $0 + $1.amount },
+                totalAmount: item.value.reduce(0) { $0 + $1.giftStatsAmount },
                 recordCount: item.value.count,
                 color: colors[index % colors.count]
             )
@@ -227,10 +227,10 @@ class StatisticsViewModel {
             let contactRecords = item.value
             let received = contactRecords
                 .filter { $0.direction == receivedValue }
-                .reduce(0.0) { $0 + $1.amount }
+                .reduce(0.0) { $0 + $1.giftStatsAmount }
             let sent = contactRecords
                 .filter { $0.direction == sentValue }
-                .reduce(0.0) { $0 + $1.amount }
+                .reduce(0.0) { $0 + $1.giftStatsAmount }
             return (name: name, received: received, sent: sent)
         }
 

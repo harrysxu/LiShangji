@@ -22,6 +22,9 @@ struct VoiceInputView: View {
     @State private var isCreatingContacts = false
     @State private var showCreateToast = false
     @State private var createToastMessage = ""
+    @State private var selectedBook: GiftBook?
+    @State private var defaultEventDate = Date()
+    @State private var defaultEventName = ""
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
     @Query(sort: \Contact.name) private var allContacts: [Contact]
@@ -89,6 +92,9 @@ struct VoiceInputView: View {
                 Text(errorMessage ?? "")
             }
             .task {
+                if selectedBook == nil {
+                    selectedBook = books.first
+                }
                 await parseRecognizedText()
             }
         }
@@ -138,6 +144,8 @@ struct VoiceInputView: View {
                     .font(.caption)
                     .foregroundStyle(Color.theme.textSecondary)
             }
+
+            batchDefaults
 
             // 一键创建联系人按钮
             let unmatchedCount = editableResults.filter { $0.matchedContact == nil && !$0.contactName.trimmingCharacters(in: .whitespaces).isEmpty }.count
@@ -198,6 +206,13 @@ struct VoiceInputView: View {
                 Picker("方向", selection: $editableResults[index].direction) {
                     ForEach(GiftDirection.allCases, id: \.self) { dir in
                         Text(dir.displayName).tag(dir)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("类型", selection: $editableResults[index].recordType) {
+                    ForEach(RecordType.allCases, id: \.self) { type in
+                        Text(type.displayName).tag(type)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -281,11 +296,34 @@ struct VoiceInputView: View {
                     Image(systemName: "sparkles")
                         .foregroundStyle(Color.theme.primary)
                     Picker("事件类型", selection: $editableResults[index].eventCategoryName) {
+                        Text("其他").tag("其他")
                         ForEach(categories, id: \.name) { cat in
                             Text(cat.name).tag(cat.name)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private var batchDefaults: some View {
+        LSJCard {
+            VStack(spacing: AppConstants.Spacing.md) {
+                HStack {
+                    Image(systemName: "book.closed.fill")
+                        .foregroundStyle(Color.theme.primary)
+                    Picker("保存到账本", selection: $selectedBook) {
+                        Text("不关联账本").tag(nil as GiftBook?)
+                        ForEach(books) { book in
+                            Text(book.name).tag(book as GiftBook?)
+                        }
+                    }
+                }
+
+                DatePicker("日期", selection: $defaultEventDate, displayedComponents: .date)
+
+                TextField("事件名称（可选）", text: $defaultEventName)
+                    .textInputAutocapitalization(.never)
             }
         }
     }
@@ -351,19 +389,30 @@ struct VoiceInputView: View {
         let recordRepository = GiftRecordRepository()
 
         do {
+            _ = try BackupService.shared.createSnapshot(context: modelContext, reason: "语音批量保存前自动备份")
+
             for result in editableResults {
                 let amount = Double(result.amountString) ?? 0
-                let eventName = "\(result.contactName)\(result.eventCategoryName)"
+                let eventName = defaultEventName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "\(result.contactName)\(result.eventCategoryName)"
+                    : defaultEventName
 
                 try recordRepository.create(
                     amount: amount,
                     direction: result.direction.rawValue,
+                    recordType: result.recordType.rawValue,
                     eventName: eventName,
                     eventCategory: result.eventCategoryName,
-                    eventDate: Date(),
+                    eventDate: defaultEventDate,
                     note: "语音录入: \(voiceService.recognizedText)",
                     contactName: result.contactName,
-                    book: books.first,
+                    source: "voice",
+                    itemName: result.recordType == .gift ? "" : eventName,
+                    estimatedAmount: result.recordType == .gift ? 0 : amount,
+                    includeInGiftStats: result.recordType != .loan,
+                    isLoanSettled: false,
+                    loanDueDate: defaultEventDate,
+                    book: selectedBook,
                     contact: result.matchedContact,
                     context: modelContext
                 )
@@ -400,6 +449,7 @@ struct VoiceInputView: View {
 
         let contactRepository = ContactRepository()
         var createdCount = 0
+        _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "语音批量创建联系人前自动备份")
 
         for index in editableResults.indices {
             let result = editableResults[index]
@@ -447,6 +497,7 @@ struct EditableVoiceResult {
     var contactName: String = ""
     var amountString: String = ""
     var direction: GiftDirection = .sent
+    var recordType: RecordType = .gift
     var eventCategoryName: String = "其他"
     var matchedContact: Contact?
 }

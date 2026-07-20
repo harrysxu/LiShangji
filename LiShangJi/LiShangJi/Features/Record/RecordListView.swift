@@ -62,15 +62,14 @@ struct RecordListView: View {
     }
 
     private func deleteRecords(at offsets: IndexSet) {
+        _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "删除记录前自动备份")
         for index in offsets {
             let record = records[index]
-            let amount = record.amount
-            let direction = record.direction
             let contact = record.contact
             let book = record.book
+            contact?.updateCacheForRemovedRecord(record)
+            book?.updateCacheForRemovedRecord(record)
             modelContext.delete(record)
-            contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
-            book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
         }
         try? modelContext.save()
         HapticManager.shared.warningNotification()
@@ -166,15 +165,14 @@ struct AllRecordsListView: View {
     }
 
     private func deleteRecords(at offsets: IndexSet) {
+        _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "删除记录前自动备份")
         for index in offsets {
             let record = loadedRecords[index]
-            let amount = record.amount
-            let direction = record.direction
             let contact = record.contact
             let book = record.book
+            contact?.updateCacheForRemovedRecord(record)
+            book?.updateCacheForRemovedRecord(record)
             modelContext.delete(record)
-            contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
-            book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
         }
         loadedRecords.remove(atOffsets: offsets)
         try? modelContext.save()

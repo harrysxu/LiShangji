@@ -6,11 +6,19 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// 联系人详情页 - 往来时间线 + 差额统计
 struct ContactDetailView: View {
     let contact: Contact
+    @Environment(\.modelContext) private var modelContext
     @State private var showingEditSheet = false
+    @State private var showReminderToast = false
+    @State private var reminderToastMessage = ""
+
+    private var suggestion: ReturnSuggestion {
+        ReturnSuggestionService.shared.suggestion(for: contact)
+    }
 
     private var sortedRecords: [GiftRecord] {
         (contact.records ?? []).sorted { $0.eventDate < $1.eventDate }
@@ -24,6 +32,8 @@ struct ContactDetailView: View {
 
                 // 收送统计
                 balanceCards
+
+                returnSuggestionCard
 
                 // 往来时间线
                 timelineSection
@@ -47,6 +57,7 @@ struct ContactDetailView: View {
         .sheet(isPresented: $showingEditSheet) {
             ContactFormView(editingContact: contact)
         }
+        .toast(isPresented: $showReminderToast, message: reminderToastMessage, type: .success)
     }
 
     // MARK: - 头部
@@ -111,6 +122,96 @@ struct ContactDetailView: View {
         .background(Color.theme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
+    }
+
+    private var returnSuggestionCard: some View {
+        LSJCard {
+            VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                HStack {
+                    Image(systemName: suggestionIcon)
+                        .foregroundStyle(suggestionColor)
+                    Text("回礼建议")
+                        .font(.headline)
+                        .foregroundStyle(Color.theme.textPrimary)
+                    Spacer()
+                    Text(suggestion.status.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(suggestionColor)
+                }
+
+                if let amount = suggestion.suggestedAmount {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("建议金额")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.theme.textSecondary)
+                        Spacer()
+                        Text(amount.currencyString)
+                            .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(suggestionColor)
+                    }
+                }
+
+                Text(suggestion.message)
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+
+                if let received = suggestion.latestReceived {
+                    Text("最近收到：\(received.eventDate.chineseFullDate) · \(received.eventName) · \(received.giftStatsAmount.currencyString)")
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+                }
+
+                if suggestion.status == .shouldReturn || suggestion.status == .watch {
+                    Button {
+                        createReturnReminder()
+                    } label: {
+                        Label("创建回礼提醒", systemImage: "bell.badge.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.theme.primary)
+                }
+            }
+        }
+    }
+
+    private var suggestionColor: Color {
+        switch suggestion.status {
+        case .shouldReturn: return Color.theme.warning
+        case .watch: return Color.theme.info
+        case .loanPending: return Color.theme.sent
+        case .none: return Color.theme.received
+        }
+    }
+
+    private var suggestionIcon: String {
+        switch suggestion.status {
+        case .shouldReturn: return "bell.badge.fill"
+        case .watch: return "eye.fill"
+        case .loanPending: return "clock.badge.exclamationmark.fill"
+        case .none: return "checkmark.seal.fill"
+        }
+    }
+
+    private func createReturnReminder() {
+        let eventDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+        let event = EventReminder(title: "给\(contact.name)回礼", eventCategory: "回礼", eventDate: eventDate)
+        if let amount = suggestion.suggestedAmount {
+            event.note = "建议金额：\(amount.currencyString)。\(suggestion.message)"
+        } else {
+            event.note = suggestion.message
+        }
+        event.reminderOption = ReminderOption.oneDay.rawValue
+        event.reminderDate = event.reminder.reminderDate(for: event.eventDate)
+        event.contacts = [contact]
+        modelContext.insert(event)
+        try? modelContext.save()
+        reminderToastMessage = "已创建回礼提醒"
+        HapticManager.shared.successNotification()
+        withAnimation {
+            showReminderToast = true
+        }
     }
 
     // MARK: - 往来时间线

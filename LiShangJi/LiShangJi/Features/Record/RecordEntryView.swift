@@ -17,6 +17,7 @@ struct RecordEntryView: View {
     @State private var showDatePicker = false
     @State private var showToast = false
     @State private var showContactPicker = false
+    @State private var shouldContinueAfterSave = false
 
     var preselectedBook: GiftBook?
 
@@ -71,6 +72,7 @@ struct RecordEntryView: View {
             ScrollView {
                 VStack(spacing: AppConstants.Spacing.lg) {
                     directionPicker
+                    recordTypePicker
                     amountDisplay
                     formFields
                 }
@@ -79,6 +81,7 @@ struct RecordEntryView: View {
                 .padding(.bottom, AppConstants.Spacing.md)
             }
 
+            continueSaveBar
             AmountKeypadView(amount: $viewModel.amount) {
                 save()
             }
@@ -93,6 +96,7 @@ struct RecordEntryView: View {
             ScrollView {
                 VStack(spacing: AppConstants.Spacing.lg) {
                     directionPicker
+                    recordTypePicker
                     amountDisplay
                     formFields
                 }
@@ -107,6 +111,8 @@ struct RecordEntryView: View {
             // 右侧：键盘区域
             VStack(spacing: 0) {
                 Spacer()
+                continueSaveBar
+                    .frame(maxWidth: 360)
                 AmountKeypadView(amount: $viewModel.amount) {
                     save()
                 }
@@ -115,6 +121,25 @@ struct RecordEntryView: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private var continueSaveBar: some View {
+        Button {
+            saveAndContinue()
+        } label: {
+            HStack(spacing: AppConstants.Spacing.sm) {
+                Image(systemName: "plus.circle.fill")
+                Text("保存并继续")
+            }
+            .font(.subheadline.weight(.medium))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppConstants.Spacing.sm)
+            .background(Color.theme.primary.opacity(0.1))
+            .foregroundStyle(Color.theme.primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.parsedAmount <= 0 || viewModel.contactName.trimmingCharacters(in: .whitespaces).isEmpty)
+        .padding(.horizontal, AppConstants.Spacing.lg)
     }
 
     // MARK: - 收到/送出切换
@@ -145,6 +170,25 @@ struct RecordEntryView: View {
                 .strokeBorder(Color.theme.divider, lineWidth: 0.5)
         )
         .accessibilityIdentifier("direction_picker")
+    }
+
+    // MARK: - 记录类型切换
+
+    private var recordTypePicker: some View {
+        Picker("记录类型", selection: $viewModel.recordType) {
+            ForEach(RecordType.allCases, id: \.self) { type in
+                Label(type.displayName, systemImage: type.icon).tag(type)
+            }
+        }
+        .pickerStyle(.segmented)
+        .tint(Color.theme.primary)
+        .onChange(of: viewModel.recordType) { _, newType in
+            if newType == .loan {
+                viewModel.includeInGiftStats = false
+            } else if !viewModel.includeInGiftStats {
+                viewModel.includeInGiftStats = newType.countsInGiftBalanceByDefault
+            }
+        }
     }
 
     // MARK: - 金额显示
@@ -179,6 +223,11 @@ struct RecordEntryView: View {
 
             Divider().foregroundStyle(Color.theme.divider)
 
+            // 类型扩展字段
+            typeSpecificField
+
+            Divider().foregroundStyle(Color.theme.divider)
+
             // 日期
             dateField
 
@@ -194,6 +243,93 @@ struct RecordEntryView: View {
         }
         .background(Color.theme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.Radius.md))
+    }
+
+    // MARK: - 类型扩展字段
+
+    @ViewBuilder
+    private var typeSpecificField: some View {
+        switch viewModel.recordType {
+        case .gift:
+            EmptyView()
+        case .item:
+            itemOrFavorFields(title: "礼品名称", placeholder: "如烟酒茶、首饰、伴手礼")
+        case .favor:
+            itemOrFavorFields(title: "人情事项", placeholder: "如帮忙办事、照顾接送")
+        case .loan:
+            loanFields
+        }
+    }
+
+    private func itemOrFavorFields(title: String, placeholder: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: AppConstants.Spacing.md) {
+                Image(systemName: viewModel.recordType.icon)
+                    .foregroundStyle(Color.theme.primary)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+                    TextField(placeholder, text: $viewModel.itemName)
+                        .font(.body)
+                }
+            }
+            .padding(AppConstants.Spacing.md)
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            HStack(spacing: AppConstants.Spacing.md) {
+                Image(systemName: "number")
+                    .foregroundStyle(Color.theme.primary)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("估算金额")
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+                    TextField("选填，用于统计", text: $viewModel.estimatedAmount)
+                        .keyboardType(.decimalPad)
+                        .font(.body)
+                }
+                Toggle("", isOn: $viewModel.includeInGiftStats)
+                    .labelsHidden()
+                    .tint(Color.theme.primary)
+            }
+            .padding(AppConstants.Spacing.md)
+        }
+    }
+
+    private var loanFields: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: AppConstants.Spacing.md) {
+                Image(systemName: "calendar.badge.clock")
+                    .foregroundStyle(Color.theme.primary)
+                    .frame(width: 24)
+                Text("到期日")
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+                Spacer()
+                DatePicker("", selection: $viewModel.loanDueDate, displayedComponents: .date)
+                    .labelsHidden()
+                    .tint(Color.theme.primary)
+            }
+            .padding(AppConstants.Spacing.md)
+
+            Divider().foregroundStyle(Color.theme.divider)
+
+            Toggle(isOn: $viewModel.isLoanSettled) {
+                HStack(spacing: AppConstants.Spacing.md) {
+                    Image(systemName: "checkmark.circle")
+                        .foregroundStyle(Color.theme.primary)
+                        .frame(width: 24)
+                    Text("已结清")
+                        .font(.caption)
+                        .foregroundStyle(Color.theme.textSecondary)
+                }
+            }
+            .tint(Color.theme.primary)
+            .padding(AppConstants.Spacing.md)
+        }
     }
 
     // MARK: - 联系人字段
@@ -427,9 +563,19 @@ struct RecordEntryView: View {
     private func save() {
         if viewModel.saveRecord(context: modelContext) {
             showToast = true
+            if shouldContinueAfterSave {
+                viewModel.resetForNextEntry()
+                shouldContinueAfterSave = false
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 dismiss()
             }
         }
+    }
+
+    private func saveAndContinue() {
+        shouldContinueAfterSave = true
+        save()
     }
 }

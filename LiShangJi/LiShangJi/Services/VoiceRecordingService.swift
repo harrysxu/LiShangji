@@ -588,6 +588,24 @@ class VoiceRecordingService: ObservableObject {
                 }
             }
         }
+
+        // 策略2.5: 在"送"、"随"等方向词后面找姓名，覆盖“送张三1000元”这类短句
+        let actionKeywords = ["送", "随", "给"]
+        for keyword in actionKeywords {
+            if let keywordRange = text.range(of: keyword) {
+                let afterKeyword = String(text[keywordRange.upperBound...])
+                let namePattern = #"^([\u4e00-\u9fa5]{2,4})(?=\d|[零一二三四五六七八九十百千万两壹贰叁肆伍陆柒捌玖拾佰仟萬]|元|圆|块|钱|$)"#
+                if let regex = try? NSRegularExpression(pattern: namePattern),
+                   let match = regex.matches(in: afterKeyword, range: NSRange(afterKeyword.startIndex..., in: afterKeyword)).last,
+                   let nameRange = Range(match.range(at: 1), in: afterKeyword) {
+                    let candidate = String(afterKeyword[nameRange])
+                    let name = trimToName(candidate, excludeWords: excludeWords)
+                    if let name = name {
+                        return name
+                    }
+                }
+            }
+        }
         
         // 策略3: 在"收到"前面或后面找姓名
         if let receivedRange = text.range(of: "收到") {
@@ -678,7 +696,7 @@ class VoiceRecordingService: ObservableObject {
             "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖",
             "拾", "佰", "仟", "萬"
         ]
-        return text.contains(where: { chineseNumbers.contains($0) })
+        return !text.isEmpty && text.allSatisfy { chineseNumbers.contains($0) }
     }
     
     /// 解析金额（改进版：处理数字分隔符）

@@ -17,6 +17,8 @@ struct RecordDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingCreateContactSheet = false
     @State private var contactHistory: [GiftRecord] = []
+    @State private var showReminderToast = false
+    @State private var reminderToastMessage = ""
 
     var body: some View {
         ScrollView {
@@ -26,6 +28,10 @@ struct RecordDetailView: View {
 
                 // 详情信息
                 detailSection
+
+                if record.isReceived, let contact = record.contact {
+                    returnReminderSection(contact: contact)
+                }
 
                 // 往来历史
                 if let contact = record.contact, !contactHistory.isEmpty {
@@ -62,13 +68,12 @@ struct RecordDetailView: View {
         .confirmationDialog("确认删除", isPresented: $showingDeleteConfirmation) {
             Button("删除此记录", role: .destructive) {
                 // 删除前更新缓存
-                let amount = record.amount
-                let direction = record.direction
                 let contact = record.contact
                 let book = record.book
+                _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "删除记录前自动备份")
+                contact?.updateCacheForRemovedRecord(record)
+                book?.updateCacheForRemovedRecord(record)
                 modelContext.delete(record)
-                contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
-                book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
                 try? modelContext.save()
                 HapticManager.shared.warningNotification()
                 dismiss()
@@ -83,12 +88,13 @@ struct RecordDetailView: View {
                 record.contact = newContact
                 record.updatedAt = Date()
                 // 更新联系人缓存
-                newContact.updateCacheForAddedRecord(amount: record.amount, direction: record.direction)
+                newContact.updateCacheForAddedRecord(record)
                 try? modelContext.save()
                 // 重新加载往来历史
                 loadContactHistory()
             }
         }
+        .toast(isPresented: $showReminderToast, message: reminderToastMessage, type: .success)
     }
 
     // MARK: - 加载往来历史
@@ -141,6 +147,24 @@ struct RecordDetailView: View {
                 detailRow("账本", value: record.book?.name ?? "未分类", icon: "book.closed.fill")
                 Divider().foregroundStyle(Color.theme.divider)
                 detailRow("类型", value: record.giftRecordType.displayName, icon: record.giftRecordType.icon)
+
+                if record.giftRecordType == .item || record.giftRecordType == .favor {
+                    if !record.itemName.isEmpty {
+                        Divider().foregroundStyle(Color.theme.divider)
+                        detailRow(record.giftRecordType == .item ? "礼品" : "事项", value: record.itemName, icon: record.giftRecordType.icon)
+                    }
+                    Divider().foregroundStyle(Color.theme.divider)
+                    detailRow("估算金额", value: record.giftStatsAmount.currencyString, icon: "number")
+                    Divider().foregroundStyle(Color.theme.divider)
+                    detailRow("计入统计", value: record.includeInGiftStats ? "是" : "否", icon: "chart.bar")
+                }
+
+                if record.giftRecordType == .loan {
+                    Divider().foregroundStyle(Color.theme.divider)
+                    detailRow("到期日", value: record.loanDueDate.chineseFullDate, icon: "calendar.badge.clock")
+                    Divider().foregroundStyle(Color.theme.divider)
+                    detailRow("结清状态", value: record.isLoanSettled ? "已结清" : "未结清", icon: record.isLoanSettled ? "checkmark.circle" : "clock")
+                }
 
                 if !record.note.isEmpty {
                     Divider().foregroundStyle(Color.theme.divider)
@@ -207,6 +231,58 @@ struct RecordDetailView: View {
 
     private var sourceDisplayName: String {
         record.sourceDisplayName
+    }
+
+    private func returnReminderSection(contact: Contact) -> some View {
+        let suggestion = ReturnSuggestionService.shared.suggestion(for: contact)
+        return LSJCard {
+            VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                HStack {
+                    Image(systemName: "bell.badge.fill")
+                        .foregroundStyle(Color.theme.warning)
+                    Text("回礼提醒")
+                        .font(.headline)
+                        .foregroundStyle(Color.theme.textPrimary)
+                    Spacer()
+                    if let amount = suggestion.suggestedAmount {
+                        Text(amount.currencyString)
+                            .font(.subheadline.bold().monospacedDigit())
+                            .foregroundStyle(Color.theme.warning)
+                    }
+                }
+
+                Text(suggestion.message)
+                    .font(.caption)
+                    .foregroundStyle(Color.theme.textSecondary)
+
+                Button {
+                    createReturnReminder(contact: contact, suggestion: suggestion)
+                } label: {
+                    Label("创建回礼提醒", systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.theme.primary)
+            }
+        }
+    }
+
+    private func createReturnReminder(contact: Contact, suggestion: ReturnSuggestion) {
+        let eventDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+        let event = EventReminder(title: "给\(contact.name)回礼", eventCategory: record.eventCategory, eventDate: eventDate)
+        let amountText = suggestion.suggestedAmount.map { "建议金额：\($0.currencyString)。" } ?? ""
+        event.note = "\(amountText)来自记录：\(record.eventName)"
+        event.reminderOption = ReminderOption.oneDay.rawValue
+        event.reminderDate = event.reminder.reminderDate(for: event.eventDate)
+        event.contacts = [contact]
+        modelContext.insert(event)
+        try? modelContext.save()
+        reminderToastMessage = "已创建回礼提醒"
+        HapticManager.shared.successNotification()
+        withAnimation {
+            showReminderToast = true
+        }
     }
 
     // MARK: - 往来历史
@@ -293,6 +369,12 @@ struct RecordEditView: View {
     @State private var eventDate: Date = Date()
     @State private var note: String = ""
     @State private var selectedBook: GiftBook?
+    @State private var recordType: RecordType = .gift
+    @State private var itemName: String = ""
+    @State private var estimatedAmount: String = ""
+    @State private var includeInGiftStats: Bool = true
+    @State private var loanDueDate: Date = Date()
+    @State private var isLoanSettled: Bool = false
     @State private var showToast = false
 
     var body: some View {
@@ -317,6 +399,12 @@ struct RecordEditView: View {
                 }
 
                 Section("事件信息") {
+                    Picker("记录类型", selection: $recordType) {
+                        ForEach(RecordType.allCases, id: \.self) { type in
+                            Label(type.displayName, systemImage: type.icon).tag(type)
+                        }
+                    }
+
                     TextField("事件名称", text: $eventName)
 
                     Picker("事件类型", selection: $selectedCategoryName) {
@@ -327,6 +415,22 @@ struct RecordEditView: View {
                     }
 
                     DatePicker("日期", selection: $eventDate, displayedComponents: .date)
+                }
+
+                if recordType == .item || recordType == .favor {
+                    Section(recordType == .item ? "礼品信息" : "人情信息") {
+                        TextField(recordType == .item ? "礼品名称" : "人情事项", text: $itemName)
+                        TextField("估算金额", text: $estimatedAmount)
+                            .keyboardType(.decimalPad)
+                        Toggle("计入人情统计", isOn: $includeInGiftStats)
+                    }
+                }
+
+                if recordType == .loan {
+                    Section("借贷信息") {
+                        DatePicker("到期日", selection: $loanDueDate, displayedComponents: .date)
+                        Toggle("已结清", isOn: $isLoanSettled)
+                    }
                 }
 
                 Section("账本") {
@@ -372,6 +476,14 @@ struct RecordEditView: View {
                 eventDate = record.eventDate
                 note = record.note
                 selectedBook = record.book
+                recordType = record.giftRecordType
+                itemName = record.itemName
+                estimatedAmount = record.estimatedAmount.truncatingRemainder(dividingBy: 1) == 0
+                    ? String(Int(record.estimatedAmount))
+                    : String(record.estimatedAmount)
+                includeInGiftStats = record.includeInGiftStats
+                loanDueDate = record.loanDueDate
+                isLoanSettled = record.isLoanSettled
             }
         }
     }
@@ -382,29 +494,40 @@ struct RecordEditView: View {
         let amountChanged = record.amount != parsedAmount
         let directionChanged = record.direction != direction.rawValue
         let bookChanged = record.book?.id != selectedBook?.id
+        let typeChanged = record.recordType != recordType.rawValue
+        let estimatedAmountChanged = abs(record.estimatedAmount - (Double(estimatedAmount) ?? 0)) > 0.01
+        let includeStatsChanged = record.includeInGiftStats != (recordType == .loan ? false : includeInGiftStats)
+        let loanSettledChanged = record.isLoanSettled != isLoanSettled
 
         // 如果账本发生变化，先从旧账本移除缓存
         let oldBook = record.book
 
         record.amount = parsedAmount
         record.direction = direction.rawValue
+        record.recordType = recordType.rawValue
         record.eventName = eventName
         record.eventCategory = selectedCategoryName
         record.eventDate = eventDate
         record.note = note
         record.book = selectedBook
+        record.itemName = itemName
+        record.estimatedAmount = Double(estimatedAmount) ?? 0
+        record.includeInGiftStats = recordType == .loan ? false : includeInGiftStats
+        record.loanDueDate = loanDueDate
+        record.isLoanSettled = isLoanSettled
+        record.settledAt = isLoanSettled ? (record.settledAt ?? Date()) : nil
         record.updatedAt = Date()
 
-        // 如果金额或方向变化，重算联系人缓存
-        if amountChanged || directionChanged {
+        // 如果金额、方向或类型变化，重算联系人缓存
+        if amountChanged || directionChanged || typeChanged || estimatedAmountChanged || includeStatsChanged || loanSettledChanged {
             record.contact?.recalculateCachedAggregates()
         }
 
-        // 如果账本、金额或方向发生变化，重算相关账本缓存
+        // 如果账本、金额、方向或类型发生变化，重算相关账本缓存
         if bookChanged {
             oldBook?.recalculateCachedAggregates()
             selectedBook?.recalculateCachedAggregates()
-        } else if amountChanged || directionChanged {
+        } else if amountChanged || directionChanged || typeChanged || estimatedAmountChanged || includeStatsChanged || loanSettledChanged {
             record.book?.recalculateCachedAggregates()
         }
 

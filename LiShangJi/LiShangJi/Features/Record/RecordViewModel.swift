@@ -22,6 +22,11 @@ class RecordViewModel {
     var selectedBook: GiftBook?
     var note: String = ""
     var recordType: RecordType = .gift
+    var itemName: String = ""
+    var estimatedAmount: String = ""
+    var includeInGiftStats: Bool = true
+    var loanDueDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    var isLoanSettled: Bool = false
 
     // 联系人搜索
     var contactSuggestions: [Contact] = []
@@ -36,6 +41,10 @@ class RecordViewModel {
     /// 计算解析后的金额
     var parsedAmount: Double {
         Double(amount) ?? 0
+    }
+
+    var parsedEstimatedAmount: Double {
+        Double(estimatedAmount) ?? 0
     }
 
     /// 搜索联系人
@@ -100,11 +109,18 @@ class RecordViewModel {
             try recordRepository.create(
                 amount: trimmedAmount,
                 direction: direction.rawValue,
+                recordType: recordType.rawValue,
                 eventName: finalEventName,
                 eventCategory: selectedCategoryName,
                 eventDate: eventDate,
                 note: note,
                 contactName: trimmedName,
+                source: "manual",
+                itemName: itemName.trimmingCharacters(in: .whitespaces),
+                estimatedAmount: parsedEstimatedAmount,
+                includeInGiftStats: recordType == .loan ? false : includeInGiftStats,
+                isLoanSettled: isLoanSettled,
+                loanDueDate: loanDueDate,
                 book: selectedBook,
                 contact: contact,
                 context: context
@@ -130,6 +146,27 @@ class RecordViewModel {
         selectedCategoryName = "婚礼"
         eventDate = Date()
         note = ""
+        recordType = .gift
+        itemName = ""
+        estimatedAmount = ""
+        includeInGiftStats = true
+        loanDueDate = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+        isLoanSettled = false
+        errorMessage = nil
+        isSaved = false
+    }
+
+    /// 连续录入场景：保留账本、方向、类型、分类和日期，只清空本笔相关字段
+    func resetForNextEntry() {
+        amount = ""
+        contactName = ""
+        selectedContact = nil
+        contactSuggestions = []
+        eventName = ""
+        note = ""
+        itemName = ""
+        estimatedAmount = ""
+        isLoanSettled = false
         errorMessage = nil
         isSaved = false
     }

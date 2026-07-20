@@ -38,17 +38,17 @@ class HomeViewModel {
 
             totalReceived = monthRecords
                 .filter { $0.direction == GiftDirection.received.rawValue }
-                .reduce(0) { $0 + $1.amount }
+                .reduce(0) { $0 + $1.giftStatsAmount }
 
             totalSent = monthRecords
                 .filter { $0.direction == GiftDirection.sent.rawValue }
-                .reduce(0) { $0 + $1.amount }
+                .reduce(0) { $0 + $1.giftStatsAmount }
 
             // 获取最近记录（限制10条）
             recentRecords = try recordRepository.fetchRecent(limit: 10, context: context)
 
-            // 获取即将到来的事件（限制3条）
-            upcomingEvents = try fetchUpcomingEvents(limit: 3, context: context)
+            // 获取待办与提醒（过期/今天优先，限制3条）
+            upcomingEvents = try fetchPendingEvents(limit: 3, context: context)
 
             // 获取总记录数（用于判断是否需要刷新）
             totalRecordCount = try fetchRecordCount(context: context)
@@ -59,18 +59,21 @@ class HomeViewModel {
         }
     }
 
-    /// 获取即将到来的事件（使用 predicate + fetchLimit）
-    private func fetchUpcomingEvents(limit: Int, context: ModelContext) throws -> [EventReminder] {
-        let now = Date()
+    /// 获取待办与提醒（过期/今天优先）
+    private func fetchPendingEvents(limit: Int, context: ModelContext) throws -> [EventReminder] {
         let predicate = #Predicate<EventReminder> { event in
-            event.isCompleted == false && event.eventDate >= now
+            event.isCompleted == false
         }
-        var descriptor = FetchDescriptor<EventReminder>(
+        let descriptor = FetchDescriptor<EventReminder>(
             predicate: predicate,
             sortBy: [SortDescriptor(\.eventDate, order: .forward)]
         )
-        descriptor.fetchLimit = limit
-        return try context.fetch(descriptor)
+        let events = try context.fetch(descriptor)
+        return Array(events.sorted { lhs, rhs in
+            let lhsDay = Calendar.current.startOfDay(for: lhs.eventDate)
+            let rhsDay = Calendar.current.startOfDay(for: rhs.eventDate)
+            return lhsDay < rhsDay
+        }.prefix(limit))
     }
 
     /// 获取记录总数（轻量查询）

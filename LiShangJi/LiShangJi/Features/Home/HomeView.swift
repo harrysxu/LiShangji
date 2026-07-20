@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingAllRecords = false
     @State private var showingEventList = false
+    @State private var showingGlobalSearch = false
     @State private var showPurchaseView = false
 
     // 语音录入相关状态
@@ -32,6 +33,17 @@ struct HomeView: View {
                         .font(.largeTitle.bold())
                         .foregroundStyle(Color.theme.textPrimary)
                     Spacer()
+                    Button {
+                        showingGlobalSearch = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.headline)
+                            .foregroundStyle(Color.theme.primary)
+                            .frame(width: 36, height: 36)
+                            .background(Color.theme.card)
+                            .clipShape(Circle())
+                    }
+                    .debounced()
                 }
                 .padding(.top, AppConstants.Spacing.sm)
 
@@ -66,6 +78,12 @@ struct HomeView: View {
         }
         .navigationDestination(isPresented: $showingEventList) {
             EventListView()
+        }
+        .navigationDestination(isPresented: $showingGlobalSearch) {
+            GlobalSearchView()
+        }
+        .navigationDestination(for: BookNavigationID.self) { navID in
+            GiftBookDetailView(bookID: navID.id)
         }
         .overlay(alignment: .bottomTrailing) {
             fabButton
@@ -284,14 +302,14 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - 即将到来的事件
+    // MARK: - 待办与提醒
 
     private var upcomingEventsSection: some View {
         Group {
             if !viewModel.upcomingEvents.isEmpty {
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
                     HStack {
-                        Text("即将到来的事件")
+                        Text("待办与提醒")
                             .font(.headline)
                             .foregroundStyle(Color.theme.textPrimary)
                         Spacer()
@@ -326,13 +344,12 @@ struct HomeView: View {
 
                                     Spacer()
 
-                                    let days = event.daysUntilEvent
-                                    Text(days == 0 ? "今天" : "\(days)天后")
+                                    Text(eventStatusText(event))
                                         .font(.caption.weight(.semibold))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(days <= 3 ? Color.theme.primary.opacity(0.15) : Color.theme.warning.opacity(0.15))
-                                        .foregroundStyle(days <= 3 ? Color.theme.primary : Color.theme.warning)
+                                        .background(eventStatusColor(event).opacity(0.15))
+                                        .foregroundStyle(eventStatusColor(event))
                                         .clipShape(Capsule())
                                 }
                                 .padding(.vertical, AppConstants.Spacing.sm)
@@ -354,6 +371,20 @@ struct HomeView: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日"
         return formatter.string(from: event.eventDate)
+    }
+
+    private func eventStatusText(_ event: EventReminder) -> String {
+        let days = event.daysUntilEvent
+        if days < 0 { return "已过期" }
+        if days == 0 { return "今天" }
+        return "\(days)天后"
+    }
+
+    private func eventStatusColor(_ event: EventReminder) -> Color {
+        let days = event.daysUntilEvent
+        if days < 0 { return Color.theme.sent }
+        if days <= 3 { return Color.theme.primary }
+        return Color.theme.warning
     }
 
     // MARK: - 最近记录区

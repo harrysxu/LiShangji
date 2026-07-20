@@ -14,6 +14,7 @@ struct GiftBookDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(NavigationRouter.self) private var router
     @State private var filterDirection: GiftDirection? = nil
+    @State private var filterRecordType: RecordType? = nil
     @State private var showingEditSheet = false
     @State private var exportShareItem: ExportShareItem?
     @State private var showExportError = false
@@ -44,10 +45,14 @@ struct GiftBookDetailView: View {
     // MARK: - 过滤 & 分组（纯内存计算属性）
 
     private var filteredRecords: [GiftRecord] {
+        var records = allRecords
         if let filter = filterDirection {
-            return allRecords.filter { $0.direction == filter.rawValue }
+            records = records.filter { $0.direction == filter.rawValue }
         }
-        return allRecords
+        if let type = filterRecordType {
+            records = records.filter { $0.giftRecordType == type }
+        }
+        return records
     }
 
     private var groupedRecords: [(String, [GiftRecord])] {
@@ -141,7 +146,10 @@ struct GiftBookDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button("导出 CSV", systemImage: "square.and.arrow.up") {
-                        exportBookCSV(book)
+                        exportBook(book, format: .csv)
+                    }
+                    Button("导出 PDF", systemImage: "doc.richtext") {
+                        exportBook(book, format: .pdf)
                     }
                     Button("编辑账本", systemImage: "pencil") {
                         showingEditSheet = true
@@ -187,9 +195,11 @@ struct GiftBookDetailView: View {
 
     // MARK: - 导出
 
-    private func exportBookCSV(_ book: GiftBook) {
+    private func exportBook(_ book: GiftBook, format: ExportFileFormat) {
         do {
-            let url = try ExportService.shared.exportBookToCSV(book: book)
+            let url = format == .pdf
+                ? try ExportService.shared.exportBookToPDF(book: book)
+                : try ExportService.shared.exportBookToCSV(book: book)
             exportShareItem = ExportShareItem(url: url)
             HapticManager.shared.successNotification()
         } catch {
@@ -248,6 +258,23 @@ struct GiftBookDetailView: View {
             Spacer()
         }
         .padding(.horizontal, AppConstants.Spacing.lg)
+        .overlay(alignment: .bottom) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppConstants.Spacing.sm) {
+                    filterButton("全部类型", isSelected: filterRecordType == nil) {
+                        filterRecordType = nil
+                    }
+                    ForEach(RecordType.allCases, id: \.self) { type in
+                        filterButton(type.displayName, isSelected: filterRecordType == type) {
+                            filterRecordType = type
+                        }
+                    }
+                }
+                .padding(.horizontal, AppConstants.Spacing.lg)
+                .padding(.top, 40)
+            }
+        }
+        .padding(.bottom, 42)
     }
 
     private func filterButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

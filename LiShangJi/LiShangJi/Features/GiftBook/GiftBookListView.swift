@@ -67,7 +67,10 @@ struct GiftBookListView: View {
                                     editingBook = book
                                 }
                                 Button("导出 CSV", systemImage: "square.and.arrow.up") {
-                                    exportBook(book)
+                                    exportBook(book, format: .csv)
+                                }
+                                Button("导出 PDF", systemImage: "doc.richtext") {
+                                    exportBook(book, format: .pdf)
                                 }
                                 Button("归档", systemImage: "archivebox") {
                                     viewModel.archiveBook(book, context: modelContext)
@@ -144,6 +147,7 @@ struct GiftBookListView: View {
             presenting: bookToDelete
         ) { book in
             Button("删除「\(book.name)」及其所有记录", role: .destructive) {
+                _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "删除账本前自动备份")
                 viewModel.deleteBook(book, context: modelContext)
                 bookToDelete = nil
             }
@@ -223,9 +227,11 @@ struct GiftBookListView: View {
 
     // MARK: - 导出
 
-    private func exportBook(_ book: GiftBook) {
+    private func exportBook(_ book: GiftBook, format: ExportFileFormat) {
         do {
-            let url = try ExportService.shared.exportBookToCSV(book: book)
+            let url = format == .pdf
+                ? try ExportService.shared.exportBookToPDF(book: book)
+                : try ExportService.shared.exportBookToCSV(book: book)
             exportShareItem = ExportShareItem(url: url)
             HapticManager.shared.successNotification()
         } catch {

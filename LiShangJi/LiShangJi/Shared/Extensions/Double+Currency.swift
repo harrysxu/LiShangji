@@ -8,31 +8,22 @@
 import Foundation
 
 extension Double {
-    // MARK: - 缓存的 NumberFormatter（避免每次调用都重新创建，NumberFormatter 创建开销约 1-5ms）
-
-    private static let _currencyFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencySymbol = "¥"
-        return f
-    }()
-
-    private static let _decimalFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        return f
-    }()
-
     /// 格式化为人民币字符串，如 "¥1,000"
     var currencyString: String {
-        let formatter = Self._currencyFormatter
-        formatter.maximumFractionDigits = (self.truncatingRemainder(dividingBy: 1) == 0) ? 0 : 2
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "¥"
+        let hasFraction = self.truncatingRemainder(dividingBy: 1) != 0
+        formatter.minimumFractionDigits = hasFraction ? 2 : 0
+        formatter.maximumFractionDigits = hasFraction ? 2 : 0
         return formatter.string(from: NSNumber(value: self)) ?? "¥0"
     }
 
     /// 格式化为简洁金额字符串，如 "1,000"
     var amountString: String {
-        let formatter = Self._decimalFormatter
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = (self.truncatingRemainder(dividingBy: 1) == 0) ? 0 : 2
         return formatter.string(from: NSNumber(value: self)) ?? "0"
     }

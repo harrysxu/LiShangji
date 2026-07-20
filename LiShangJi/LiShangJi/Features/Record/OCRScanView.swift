@@ -25,9 +25,16 @@ struct OCRScanView: View {
     @State private var isCreatingContacts = false  // 防止重复点击
     @State private var showCreateToast = false
     @State private var createToastMessage = ""
+    @State private var defaultDirection: GiftDirection = .received
+    @State private var defaultRecordType: RecordType = .gift
+    @State private var defaultEventCategory = "其他"
+    @State private var defaultEventDate = Date()
+    @State private var defaultEventName = ""
 
     @Query(sort: \GiftBook.sortOrder) private var books: [GiftBook]
     @Query(sort: \Contact.name) private var allContacts: [Contact]
+    @Query(filter: #Predicate<CategoryItem> { $0.isVisible == true }, sort: \CategoryItem.sortOrder)
+    private var categories: [CategoryItem]
 
     var body: some View {
         NavigationStack {
@@ -191,6 +198,12 @@ struct OCRScanView: View {
                     // 账本选择
                     Section {
                         bookPicker
+                    }
+
+                    Section {
+                        batchDefaults
+                    } header: {
+                        Text("批量设置")
                     }
 
                     // 全选/取消全选
@@ -397,6 +410,46 @@ struct OCRScanView: View {
         .listRowBackground(Color.theme.card)
     }
 
+    private var batchDefaults: some View {
+        VStack(spacing: AppConstants.Spacing.md) {
+            Picker("方向", selection: $defaultDirection) {
+                ForEach(GiftDirection.allCases, id: \.self) { direction in
+                    Text(direction.displayName).tag(direction)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("记录类型", selection: $defaultRecordType) {
+                ForEach(RecordType.allCases, id: \.self) { type in
+                    Text(type.displayName).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            HStack {
+                Image(systemName: "tag.fill")
+                    .foregroundStyle(Color.theme.primary)
+                Picker("分类", selection: $defaultEventCategory) {
+                    Text("其他").tag("其他")
+                    ForEach(categories, id: \.name) { category in
+                        Text(category.name).tag(category.name)
+                    }
+                }
+            }
+
+            DatePicker("日期", selection: $defaultEventDate, displayedComponents: .date)
+
+            TextField("事件名称（可选）", text: $defaultEventName)
+                .textInputAutocapitalization(.never)
+        }
+        .listRowBackground(Color.theme.card)
+        .onAppear {
+            if defaultEventCategory == "其他", let first = categories.first {
+                defaultEventCategory = first.name
+            }
+        }
+    }
+
     // MARK: - 处理图片
 
     private func processImage(_ image: UIImage) {
@@ -448,6 +501,8 @@ struct OCRScanView: View {
         let contactRepository = ContactRepository()
         var createdCount = 0
 
+        _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "OCR 批量创建联系人前自动备份")
+
         for index in recognizedItems.indices {
             let item = recognizedItems[index]
             let trimmedName = item.name.trimmingCharacters(in: .whitespaces)
@@ -483,19 +538,30 @@ struct OCRScanView: View {
     private func saveAllRecords() {
         let recordRepository = GiftRecordRepository()
         let targetBook = selectedBook
+        _ = try? BackupService.shared.createSnapshot(context: modelContext, reason: "OCR 批量保存前自动备份")
 
         // 只保存选中的条目
         for item in recognizedItems where item.isSelected && item.amount > 0 && !item.name.isEmpty {
             do {
+                let eventName = defaultEventName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "\(item.name)\(defaultEventCategory)"
+                    : defaultEventName
                 // 创建记录：contactName 始终填充，contact 使用匹配到的联系人（可为 nil）
                 try recordRepository.create(
                     amount: item.amount,
-                    direction: GiftDirection.received.rawValue,
-                    eventName: "\(item.name)的礼金",
-                    eventCategory: "其他",
-                    eventDate: Date(),
+                    direction: defaultDirection.rawValue,
+                    recordType: defaultRecordType.rawValue,
+                    eventName: eventName,
+                    eventCategory: defaultEventCategory,
+                    eventDate: defaultEventDate,
                     note: "OCR 识别录入",
                     contactName: item.name,
+                    source: "ocr",
+                    itemName: defaultRecordType == .gift ? "" : eventName,
+                    estimatedAmount: defaultRecordType == .gift ? 0 : item.amount,
+                    includeInGiftStats: defaultRecordType != .loan,
+                    isLoanSettled: false,
+                    loanDueDate: defaultEventDate,
                     book: targetBook,
                     contact: item.matchedContact,
                     context: modelContext

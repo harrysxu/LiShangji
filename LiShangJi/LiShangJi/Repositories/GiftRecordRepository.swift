@@ -74,18 +74,77 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
         contact: Contact?,
         context: ModelContext
     ) throws -> GiftRecord {
+        try create(
+            amount: amount,
+            direction: direction,
+            recordType: RecordType.gift.rawValue,
+            eventName: eventName,
+            eventCategory: eventCategory,
+            eventDate: eventDate,
+            note: note,
+            contactName: contactName,
+            source: "manual",
+            itemName: "",
+            estimatedAmount: 0,
+            includeInGiftStats: true,
+            isLoanSettled: false,
+            loanDueDate: eventDate,
+            book: book,
+            contact: contact,
+            context: context
+        )
+    }
+
+    @discardableResult
+    func create(
+        amount: Double,
+        direction: String,
+        recordType: String,
+        eventName: String,
+        eventCategory: String,
+        eventDate: Date,
+        note: String,
+        contactName: String,
+        source: String,
+        itemName: String,
+        estimatedAmount: Double,
+        includeInGiftStats: Bool,
+        isLoanSettled: Bool,
+        loanDueDate: Date,
+        book: GiftBook?,
+        contact: Contact?,
+        context: ModelContext
+    ) throws -> GiftRecord {
         let record = GiftRecord(amount: amount, direction: direction, eventName: eventName)
+        record.recordType = recordType
         record.eventCategory = eventCategory
         record.eventDate = eventDate
         record.note = note
         record.contactName = contactName
+        record.source = source
+        record.itemName = itemName
+        record.estimatedAmount = estimatedAmount
+        record.includeInGiftStats = includeInGiftStats
+        record.isLoanSettled = isLoanSettled
+        record.loanDueDate = loanDueDate
         record.book = book
         record.contact = contact
         context.insert(record)
 
         // 增量更新缓存聚合字段
-        contact?.updateCacheForAddedRecord(amount: amount, direction: direction)
-        book?.updateCacheForAddedRecord(amount: amount, direction: direction)
+        let cacheAmount = record.giftRecordType == .loan ? amount : record.giftStatsAmount
+        contact?.updateCacheForAddedRecord(
+            amount: cacheAmount,
+            direction: direction,
+            recordType: recordType,
+            includeInGiftStats: record.giftRecordType == .loan ? !isLoanSettled : includeInGiftStats
+        )
+        book?.updateCacheForAddedRecord(
+            amount: cacheAmount,
+            direction: direction,
+            recordType: recordType,
+            includeInGiftStats: record.giftRecordType == .loan ? !isLoanSettled : includeInGiftStats
+        )
 
         try context.save()
         return record
@@ -108,13 +167,27 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
         // 删除前更新缓存
         let amount = record.amount
         let direction = record.direction
+        let recordType = record.recordType
+        let includeInGiftStats = record.includeInGiftStats
+        let includeInCache = record.giftRecordType == .loan ? !record.isLoanSettled : includeInGiftStats
         let contact = record.contact
         let book = record.book
+        let cacheAmount = record.giftRecordType == .loan ? amount : record.giftStatsAmount
 
         context.delete(record)
 
-        contact?.updateCacheForRemovedRecord(amount: amount, direction: direction)
-        book?.updateCacheForRemovedRecord(amount: amount, direction: direction)
+        contact?.updateCacheForRemovedRecord(
+            amount: cacheAmount,
+            direction: direction,
+            recordType: recordType,
+            includeInGiftStats: includeInCache
+        )
+        book?.updateCacheForRemovedRecord(
+            amount: cacheAmount,
+            direction: direction,
+            recordType: recordType,
+            includeInGiftStats: includeInCache
+        )
 
         try context.save()
     }
@@ -125,7 +198,7 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
             record.direction == sentValue
         }
         let records = try context.fetch(FetchDescriptor<GiftRecord>(predicate: predicate))
-        return records.reduce(0) { $0 + $1.amount }
+        return records.reduce(0) { $0 + $1.giftStatsAmount }
     }
 
     func totalReceived(context: ModelContext) throws -> Double {
@@ -134,6 +207,6 @@ struct GiftRecordRepository: GiftRecordRepositoryProtocol {
             record.direction == receivedValue
         }
         let records = try context.fetch(FetchDescriptor<GiftRecord>(predicate: predicate))
-        return records.reduce(0) { $0 + $1.amount }
+        return records.reduce(0) { $0 + $1.giftStatsAmount }
     }
 }

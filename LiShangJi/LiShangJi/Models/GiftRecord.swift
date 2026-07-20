@@ -14,7 +14,7 @@ final class GiftRecord {
     var id: UUID = UUID()
     var amount: Double = 0.0                       // 金额
     var direction: String = "sent"                 // "sent"(送出) / "received"(收到)
-    var recordType: String = "gift"                // "gift"(赠与) / "loan"(借贷)
+    var recordType: String = "gift"                // gift / item / favor / loan
     var eventName: String = ""                     // 事件名称，如"张三婚礼"
     var eventCategory: String = "婚礼"              // 事件类别（中文名）
     var eventDate: Date = Date()                   // 事件日期
@@ -31,6 +31,12 @@ final class GiftRecord {
     // MARK: - 借贷专用字段
     var isLoanSettled: Bool = false                 // 借贷是否已结清
     var loanDueDate: Date = Date()                 // 借贷到期日
+
+    // MARK: - 礼品 / 人情扩展字段
+    var itemName: String = ""                      // 礼品名称或人情事项
+    var estimatedAmount: Double = 0                // 礼品/人情估算金额
+    var includeInGiftStats: Bool = true            // 是否计入人情收支统计
+    var settledAt: Date?                           // 借贷结清日期
 
     // MARK: - 关系
     var book: GiftBook?                            // 所属账本
@@ -62,9 +68,28 @@ final class GiftRecord {
         RecordType(rawValue: recordType) ?? .gift
     }
 
+    /// 统计金额：随礼使用 amount，礼品/人情优先使用估算金额，借贷默认不计入人情统计
+    var giftStatsAmount: Double {
+        guard includeInGiftStats, giftRecordType != .loan else { return 0 }
+        if giftRecordType == .item || giftRecordType == .favor {
+            return estimatedAmount > 0 ? estimatedAmount : amount
+        }
+        return amount
+    }
+
+    /// 借贷金额：仅借贷类型计入借贷统计
+    var loanAmount: Double {
+        giftRecordType == .loan ? amount : 0
+    }
+
     /// 是否为收到
     var isReceived: Bool {
         direction == GiftDirection.received.rawValue
+    }
+
+    /// 是否为借入/收到
+    var isIncoming: Bool {
+        isReceived
     }
 
     /// 显示名称：优先使用联系人名称，其次使用独立姓名
@@ -80,6 +105,7 @@ final class GiftRecord {
         switch source {
         case "ocr": return "OCR 识别"
         case "voice": return "语音输入"
+        case "import": return "数据导入"
         default: return "手动"
         }
     }
